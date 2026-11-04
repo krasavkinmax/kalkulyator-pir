@@ -1,0 +1,53 @@
+{
+  "status": "нужна калибровка",
+  "version": null,
+  "currency": "RUB",
+  "hoursBasis": "Часы участка задаются на 100 м. Часы объекта и штучной позиции задаются отдельно и на метр не размазываются.",
+  "note": "Накладные и налог — отдельные множители, не внутри ставки за метр. Часы и ставки руб/час пустые, пока нет факта или явного указания.",
+  "roleColumns": [
+    "id",
+    "label",
+    "rubPerHour",
+    "hoursPer100m",
+    "hoursPerObject",
+    "source"
+  ],
+  "roles": [
+    {
+      "id": "gip",
+      "label": "ГИП",
+      "rubPerHour": null,
+      "hoursPer100m": null,
+      "hoursPerObject": null,
+      "source": null
+    },
+    {
+      "id": "networks",
+      "label": "Проектировщик сетей",
+      "rubPerHour": null,
+      "hoursPer100m": null,
+      "hoursPerObject": null,
+      "source": null
+    },
+    {
+      "id": "chambers",
+      "label": "Специалист по колодцам и камерам",
+      "rubPerHour": null,
+      "hoursPer100m": null,
+      "hoursPerObject": null,
+      "source": null
+    },
+    {
+      "id": "specs",
+      "label": "Выпуск спецификаций",
+      "rubPerHour": null,
+      "hoursPer100m": null,
+      "hoursPerObject": null,
+      "source": null
+    }
+  ],
+  "pointItemHourColumns": ["pointItemId", "roleId", "hours", "source"],
+  "hoursPerPointItem": [],
+  "overheadFactor": null,
+  "taxFactor": null
+}

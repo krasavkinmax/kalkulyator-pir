@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Калькулятор ПИР — учебный макет</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Literata:opsz,wght@7..72,480;7..72,650&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --shell: light-dark(oklch(0.34 0.07 235), oklch(0.42 0.06 235));
+      --on-shell: light-dark(oklch(0.98 0.005 235), oklch(0.98 0.01 235));
+      --ground: light-dark(oklch(0.94 0.016 235), oklch(0.22 0.025 235));
+      --sheet: light-dark(oklch(0.985 0.005 235), oklch(0.27 0.022 235));
+      --ink: light-dark(oklch(0.26 0.03 235), oklch(0.94 0.012 235));
+      --soft: light-dark(oklch(0.42 0.035 235), oklch(0.78 0.03 235));
+      --line: light-dark(oklch(0.78 0.02 235), oklch(0.42 0.03 235));
+      --focus: light-dark(oklch(0.48 0.14 235), oklch(0.82 0.08 235));
+      --go: light-dark(oklch(0.4 0.09 155), oklch(0.78 0.1 155));
+      --go-bg: light-dark(oklch(0.92 0.04 155), oklch(0.38 0.06 155));
+      --wait: light-dark(oklch(0.42 0.09 75), oklch(0.86 0.1 85));
+      --wait-bg: light-dark(oklch(0.92 0.05 85), oklch(0.4 0.06 75));
+      --stop: light-dark(oklch(0.42 0.12 25), oklch(0.8 0.1 25));
+      --stop-bg: light-dark(oklch(0.93 0.03 25), oklch(0.38 0.06 25));
+      --v1: oklch(0.48 0.12 235);
+      --k1: oklch(0.5 0.11 55);
+      --k2: oklch(0.48 0.1 145);
+      --drain: oklch(0.48 0.08 200);
+      --shadow: light-dark(oklch(0.34 0.07 235 / 0.18), oklch(0 0 0 / 0.35));
+      font-family: "Golos Text", "Segoe UI", sans-serif;
+      font-size: 100%;
+      line-height: 1.5;
+      accent-color: var(--shell);
+      scrollbar-color: var(--line) transparent;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--ground);
+      color: var(--ink);
+      text-align: start;
+    }
+
+    ::selection {
+      background: var(--shell);
+      color: var(--on-shell);
+    }
+
+    :focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .skip {
+      position: absolute;
+      inset-inline-start: 0.75rem;
+      inset-block-start: 0.75rem;
+      transform: translateY(-150%);
+      background: var(--sheet);
+      color: var(--ink);
+      padding: 0.4rem 0.7rem;
+      z-index: 10;
+    }
+
+    .skip:focus { transform: none; }
+
+    .vh {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .rail {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem 1.25rem;
+      padding: 0.85rem 1.25rem;
+      background: var(--shell);
+      color: var(--on-shell);
+    }
+
+    .brand {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .tabs { display: flex; gap: 0.25rem; }
+
+    .tabs button,
+    .actions button,
+    .text-btn {
+      font: inherit;
+      color: var(--on-shell);
+      background: transparent;
+      border: 1px solid color-mix(in oklab, var(--on-shell) 45%, transparent);
+      border-radius: 2px;
+      min-block-size: 2.5rem;
+      padding: 0.35rem 0.8rem;
+      cursor: pointer;
+    }
+
+    .tabs button[aria-selected="true"] {
+      background: var(--on-shell);
+      color: var(--shell);
+      border-color: var(--on-shell);
+    }
+
+    .signal {
+      display: flex;
+      border: 1px solid color-mix(in oklab, var(--on-shell) 50%, transparent);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .signal span {
+      padding: 0.35rem 0.75rem;
+      font-size: 0.92rem;
+      font-weight: 500;
+    }
+
+    .signal span[data-on="true"][data-tone="go"] { background: var(--go-bg); color: var(--go); }
+    .signal span[data-on="true"][data-tone="wait"] { background: var(--wait-bg); color: var(--wait); }
+    .signal span[data-on="true"][data-tone="stop"] { background: var(--stop-bg); color: var(--stop); }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .signal span {
+        transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+    }
+
+    .wrap {
+      width: min(72rem, calc(100% - 2rem));
+      margin: 1.25rem auto 3rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: clamp(1.7rem, 1.2rem + 1.4vw, 2.2rem);
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      text-wrap: balance;
+    }
+
+    .lede {
+      max-width: 68ch;
+      margin: 0 0 1.25rem;
+      color: var(--soft);
+      text-wrap: pretty;
+    }
+
+    fieldset {
+      margin: 0 0 1.5rem;
+      padding: 0.9rem 1rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: var(--sheet);
+      min-inline-size: 0;
+    }
+
+    legend {
+      padding: 0 0.35rem;
+      font-weight: 600;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      gap: 0.85rem 1rem;
+    }
+
+    label, .choice {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      color: var(--soft);
+      font-size: 0.92rem;
+    }
+
+    .choices { display: flex; flex-wrap: wrap; gap: 0.55rem 1rem; }
+    .choices label { flex-direction: row; align-items: center; color: var(--ink); }
+
+    input, select, button { font: inherit; }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      inline-size: 100%;
+      min-block-size: 2.5rem;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: var(--sheet);
+      color: var(--ink);
+    }
+
+    input[type="number"] { text-align: end; font-variant-numeric: tabular-nums; }
+
+    .hint, .warn {
+      margin: 0.55rem 0 0;
+      color: var(--soft);
+      font-size: 0.92rem;
+    }
+
+    .warn { color: var(--stop); }
+
+    .table-wrapper {
+      overflow: auto;
+      max-inline-size: 100%;
+      max-block-size: min(28rem, 70vh);
+      container-type: inline-size;
+      background: var(--sheet);
+      border: 1px solid var(--line);
+      border-radius: 2px;
+    }
+
+    table {
+      border-collapse: separate;
+      border-spacing: 0;
+      inline-size: 100%;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #sections { min-inline-size: 68rem; }
+    #sections th:nth-child(7),
+    #sections td:nth-child(7) {
+      position: sticky;
+      inset-inline-end: 6.4rem;
+      z-index: 3;
+      border-inline-start: 1px solid var(--line);
+    }
+    #sections th:nth-child(8),
+    #sections td:nth-child(8) {
+      position: sticky;
+      inset-inline-end: 0;
+      z-index: 3;
+    }
+    #sections thead th:nth-child(7),
+    #sections thead th:nth-child(8) { z-index: 4; }
+    #points { min-inline-size: 52rem; }
+    #sections select { min-inline-size: 8.5rem; }
+    #sections input[type="number"] { min-inline-size: 4.5rem; }
+    .icon-btn { white-space: nowrap; }
+
+    caption {
+      caption-side: top;
+      padding: 0.75rem 0.8rem 0.35rem;
+      text-align: start;
+      font-weight: 600;
+      font-size: 1.05rem;
+    }
+
+    th, td {
+      padding: 0.4rem 0.5rem;
+      border-block-end: 1px solid var(--line);
+      text-align: start;
+      vertical-align: middle;
+      background: var(--sheet);
+    }
+
+    th { font-weight: 500; text-wrap: balance; color: var(--soft); }
+
+    thead th {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+    }
+
+    tbody th {
+      position: sticky;
+      inset-inline-start: 0;
+      z-index: 1;
+      font-weight: 500;
+      color: var(--ink);
+    }
+
+    td.num, th.num { text-align: end; }
+
+    .swatch {
+      display: inline-block;
+      inline-size: 0.65rem;
+      block-size: 0.65rem;
+      margin-inline-end: 0.35rem;
+      border-radius: 50%;
+      border: 1px solid var(--ink);
+      vertical-align: 0.05rem;
+    }
+
+    .swatch[data-net="v1"] { background: var(--v1); }
+    .swatch[data-net="k1"] { background: var(--k1); }
+    .swatch[data-net="k2"] { background: var(--k2); }
+    .swatch[data-net="drain"] { background: var(--drain); }
+
+    .line-sum { font-weight: 600; white-space: nowrap; }
+
+    .icon-btn {
+      font: inherit;
+      min-inline-size: 2.5rem;
+      min-block-size: 2.5rem;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: var(--sheet);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.6rem 0 1.4rem;
+    }
+
+    .toolbar button,
+    .sheet-actions button {
+      font: inherit;
+      min-block-size: 2.6rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: 2px;
+      border: 1px solid var(--shell);
+      background: var(--shell);
+      color: var(--on-shell);
+      cursor: pointer;
+    }
+
+    .toolbar button.quiet,
+    .sheet-actions button.quiet {
+      background: var(--sheet);
+      color: var(--ink);
+      border-color: var(--line);
+    }
+
+    button:disabled, button[aria-disabled="true"] {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .checks { display: flex; flex-direction: column; gap: 0.45rem; }
+    .checks label { flex-direction: row; align-items: center; color: var(--ink); }
+
+    .totals { inline-size: min(36rem, 100%); }
+    .totals td:last-child, .totals th:last-child { text-align: end; font-variant-numeric: tabular-nums; }
+
+    details { margin: 0 0 1.25rem; color: var(--soft); }
+    details p { max-width: 70ch; }
+
+    #proposal {
+      width: min(42rem, calc(100% - 2rem));
+      margin: 1.5rem auto 3rem;
+      padding: 2.2rem 2rem 2.4rem;
+      background: var(--sheet);
+      color: var(--ink);
+      border-block-start: 0.45rem solid var(--shell);
+      box-shadow: 0.12rem 0.45rem 1.2rem var(--shadow);
+      font-family: Literata, Georgia, serif;
+    }
+
+    #proposal h1 {
+      font-weight: 600;
+      font-size: clamp(1.8rem, 1.3rem + 1vw, 2.35rem);
+    }
+
+    #proposal p { max-width: 68ch; text-wrap: pretty; }
+
+    .letter-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-block-end: 1.5rem;
+      font-family: "Golos Text", "Segoe UI", sans-serif;
+      font-size: 0.95rem;
+    }
+
+    #proposal table { font-family: "Golos Text", "Segoe UI", sans-serif; font-size: 0.95rem; }
+    #proposal .sum-row td { font-weight: 700; border-block-end: 0; }
+
+    .sheet-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1.25rem 0 0;
+      font-family: "Golos Text", "Segoe UI", sans-serif;
+    }
+
+    [hidden] { display: none !important; }
+
+    @container (width < 40rem) {
+      #sections table, #sections thead, #sections tbody, #sections tr, #sections th, #sections td,
+      #points table, #points thead, #points tbody, #points tr, #points th, #points td {
+        display: block;
+      }
+
+      #sections thead, #points thead { display: none; }
+
+      #sections tr, #points tr {
+        margin-block-end: 0.8rem;
+        border: 1px solid var(--line);
+      }
+
+      #sections tbody th, #points tbody th {
+        position: sticky;
+        inset-block-start: 0;
+        inset-inline-start: auto;
+        z-index: 2;
+      }
+
+      #sections td::before, #points td::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--soft);
+        font-size: 0.82rem;
+      }
+    }
+
+    @media (forced-colors: active) {
+      .signal span[data-on="true"] { outline: 2px solid CanvasText; }
+      .tabs button[aria-selected="true"] { outline: 2px solid CanvasText; }
+      fieldset, .table-wrapper, input, select, button { border-color: CanvasText; }
+    }
+
+    @media print {
+      body > :not(#proposal) { display: none !important; }
+      #proposal {
+        display: block !important;
+        width: auto;
+        margin: 0;
+        box-shadow: none;
+        border: 0;
+      }
+      .sheet-actions { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#object-title">К карточке объекта</a>
+  <header class="rail">
+    <p class="brand">Калькулятор ПИР</p>
+    <div class="tabs" role="tablist" aria-label="Вид расчёта">
+      <button type="button" id="tab-desk" role="tab" aria-selected="true" aria-controls="desk">Расчёт</button>
+      <button type="button" id="tab-book" role="tab" aria-selected="false" aria-controls="book">Сооружения</button>
+      <button type="button" id="tab-sbc" role="tab" aria-selected="false" aria-controls="sbc">Стоимость в СБЦ</button>
+      <button type="button" id="tab-kp" role="tab" aria-selected="false" aria-controls="proposal">Коммерческое КП</button>
+    </div>
+    <div class="signal" id="signal" role="status" aria-live="polite">
+      <span data-tone="go" data-on="false">Можно в КП</span>
+      <span data-tone="wait" data-on="true">Проверить</span>
+      <span data-tone="stop" data-on="false">Стоп</span>
+    </div>
+  </header>
+
+  <main class="wrap" id="desk">
+    <h1 id="object-title">ЖК «Северный берег»</h1>
+    <p class="lede">Учебный макет внутреннего экрана. Суммы посчитаны на выдуманных ставках и не годятся для договора. Себестоимость, маржа и ориентир СБЦ остаются здесь и в коммерческое КП не попадают.</p>
+
+    <form id="card" action="#card" method="post">
+      <fieldset>
+        <legend>Карточка объекта</legend>
+        <div class="fields">
+          <label>Заказчик
+            <input name="customer" autocomplete="organization" required value="ООО «Северная девелопмент»">
+          </label>
+          <label>Адрес
+            <input name="address" autocomplete="street-address" required value="ул. Полевая, коридор наружных сетей">
+          </label>
+          <label>Объект
+            <input name="object" required value="ЖК «Северный берег»">
+          </label>
+          <div class="choice">Стадия
+            <div class="choices" id="stage">
+              <label><input type="radio" name="stage" value="p"> П</label>
+              <label><input type="radio" name="stage" value="r"> Р</label>
+              <label><input type="radio" name="stage" value="pr" checked> П+Р</label>
+            </div>
+          </div>
+          <div class="choice">Пакет
+            <div class="choices">
+              <label><input type="radio" name="package" value="basic"> Базовый</label>
+              <label><input type="radio" name="package" value="standard" checked> Стандарт</label>
+              <label><input type="radio" name="package" value="expert"> Экспертиза</label>
+            </div>
+            <p class="hint">Пакет задаёт состав коммерческих работ и множитель к ставке. На расчёт по СБЦ он не влияет.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sections-caption">
+        <table id="sections">
+          <caption id="sections-caption">Участки одного коридора</caption>
+          <thead>
+            <tr>
+              <th>Сеть</th>
+              <th class="num">Длина, м</th>
+              <th class="num">Диаметр, мм</th>
+              <th>Условия</th>
+              <th>Глубина</th>
+              <th>Способ</th>
+              <th class="num">Сумма</th>
+              <th><span class="vh">Действие</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th><span class="swatch" data-net="v1" aria-hidden="true"></span>
+                <select name="type" aria-label="Тип сети">
+                  <option value="v1" selected>В1</option>
+                  <option value="k1">К1</option>
+                  <option value="k2">К2</option>
+                  <option value="drain">Дренаж</option>
+                </select>
+              </th>
+              <td data-label="Длина, м"><input name="length" type="number" min="0" step="1" value="420" aria-label="Длина, м"></td>
+              <td data-label="Диаметр, мм"><input name="diameter" type="number" min="1" step="1" value="225" aria-label="Диаметр, мм"></td>
+              <td data-label="Условия"><select name="place" aria-label="Условия"><option value="field">Поле</option><option value="city" selected>Город</option><option value="tight">Стеснённые</option><option value="recon">Реконструкция</option></select></td>
+              <td data-label="Глубина"><select name="depth" aria-label="Глубина"><option value="d2">до 2 м</option><option value="d4" selected>2–4 м</option><option value="deep">глубже 4 м</option></select></td>
+              <td data-label="Способ"><select name="method" aria-label="Способ"><option value="open" selected>Открытая</option><option value="hdd">ГНБ</option><option value="punch">Продавливание</option></select></td>
+              <td class="num line-sum" data-label="Сумма">—</td>
+              <td data-label="Действие"><button type="button" class="icon-btn remove-section">Удалить</button></td>
+            </tr>
+            <tr>
+              <th><span class="swatch" data-net="k1" aria-hidden="true"></span>
+                <select name="type" aria-label="Тип сети">
+                  <option value="v1">В1</option>
+                  <option value="k1" selected>К1</option>
+                  <option value="k2">К2</option>
+                  <option value="drain">Дренаж</option>
+                </select>
+              </th>
+              <td data-label="Длина, м"><input name="length" type="number" min="0" step="1" value="380" aria-label="Длина, м"></td>
+              <td data-label="Диаметр, мм"><input name="diameter" type="number" min="1" step="1" value="200" aria-label="Диаметр, мм"></td>
+              <td data-label="Условия"><select name="place" aria-label="Условия"><option value="field">Поле</option><option value="city" selected>Город</option><option value="tight">Стеснённые</option><option value="recon">Реконструкция</option></select></td>
+              <td data-label="Глубина"><select name="depth" aria-label="Глубина"><option value="d2">до 2 м</option><option value="d4" selected>2–4 м</option><option value="deep">глубже 4 м</option></select></td>
+              <td data-label="Способ"><select name="method" aria-label="Способ"><option value="open" selected>Открытая</option><option value="hdd">ГНБ</option><option value="punch">Продавливание</option></select></td>
+              <td class="num line-sum" data-label="Сумма">—</td>
+              <td data-label="Действие"><button type="button" class="icon-btn remove-section">Удалить</button></td>
+            </tr>
+            <tr>
+              <th><span class="swatch" data-net="k2" aria-hidden="true"></span>
+                <select name="type" aria-label="Тип сети">
+                  <option value="v1">В1</option>
+                  <option value="k1">К1</option>
+                  <option value="k2" selected>К2</option>
+                  <option value="drain">Дренаж</option>
+                </select>
+              </th>
+              <td data-label="Длина, м"><input name="length" type="number" min="0" step="1" value="510" aria-label="Длина, м"></td>
+              <td data-label="Диаметр, мм"><input name="diameter" type="number" min="1" step="1" value="400" aria-label="Диаметр, мм"></td>
+              <td data-label="Условия"><select name="place" aria-label="Условия"><option value="field">Поле</option><option value="city" selected>Город</option><option value="tight">Стеснённые</option><option value="recon">Реконструкция</option></select></td>
+              <td data-label="Глубина"><select name="depth" aria-label="Глубина"><option value="d2">до 2 м</option><option value="d4" selected>2–4 м</option><option value="deep">глубже 4 м</option></select></td>
+              <td data-label="Способ"><select name="method" aria-label="Способ"><option value="open" selected>Открытая</option><option value="hdd">ГНБ</option><option value="punch">Продавливание</option></select></td>
+              <td class="num line-sum" data-label="Сумма">—</td>
+              <td data-label="Действие"><button type="button" class="icon-btn remove-section">Удалить</button></td>
+            </tr>
+            <tr>
+              <th><span class="swatch" data-net="drain" aria-hidden="true"></span>
+                <select name="type" aria-label="Тип сети">
+                  <option value="v1">В1</option>
+                  <option value="k1">К1</option>
+                  <option value="k2">К2</option>
+                  <option value="drain" selected>Дренаж</option>
+                </select>
+              </th>
+              <td data-label="Длина, м"><input name="length" type="number" min="0" step="1" value="180" aria-label="Длина, м"></td>
+              <td data-label="Диаметр, мм"><input name="diameter" type="number" min="1" step="1" value="160" aria-label="Диаметр, мм"></td>
+              <td data-label="Условия"><select name="place" aria-label="Условия"><option value="field">Поле</option><option value="city" selected>Город</option><option value="tight">Стеснённые</option><option value="recon">Реконструкция</option></select></td>
+              <td data-label="Глубина"><select name="depth" aria-label="Глубина"><option value="d2" selected>до 2 м</option><option value="d4">2–4 м</option><option value="deep">глубже 4 м</option></select></td>
+              <td data-label="Способ"><select name="method" aria-label="Способ"><option value="open" selected>Открытая</option><option value="hdd">ГНБ</option><option value="punch">Продавливание</option></select></td>
+              <td class="num line-sum" data-label="Сумма">—</td>
+              <td data-label="Действие"><button type="button" class="icon-btn remove-section">Удалить</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="add-section" class="quiet">Добавить участок</button>
+      </div>
+      <p class="hint" id="sections-empty" hidden>Добавьте участок, чтобы появилась цена сетей.</p>
+
+      <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="points-caption">
+        <table id="points">
+          <caption id="points-caption">Сооружения на этом объекте</caption>
+          <thead>
+            <tr>
+              <th>Позиция</th>
+              <th>Параметр</th>
+              <th class="num">Количество</th>
+              <th class="num">Цена за единицу</th>
+              <th class="num">Сумма</th>
+              <th><span class="vh">Действие</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th><select name="point" aria-label="Позиция" data-selected="kns"></select></th>
+              <td data-label="Параметр"><select name="variant" aria-label="Параметр" data-selected="kns-24"></select></td>
+              <td data-label="Количество"><input name="qty" type="number" min="0" step="1" value="1" aria-label="Количество"></td>
+              <td class="num unit-price" data-label="Цена за единицу">—</td>
+              <td class="num line-sum" data-label="Сумма">—</td>
+              <td data-label="Действие"><button type="button" class="icon-btn remove-point">Удалить</button></td>
+            </tr>
+            <tr>
+              <th><select name="point" aria-label="Позиция" data-selected="cross"></select></th>
+              <td data-label="Параметр"><select name="variant" aria-label="Параметр" data-selected="cross-road"></select></td>
+              <td data-label="Количество"><input name="qty" type="number" min="0" step="1" value="1" aria-label="Количество"></td>
+              <td class="num unit-price" data-label="Цена за единицу">—</td>
+              <td class="num line-sum" data-label="Сумма">—</td>
+              <td data-label="Действие"><button type="button" class="icon-btn remove-point">Удалить</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="add-point" class="quiet">Добавить сооружение</button>
+      </div>
+
+      <fieldset>
+        <legend>Опции</legend>
+        <div class="checks">
+          <label><input type="checkbox" name="opt" value="bim"> BIM в Civil 3D</label>
+          <label><input type="checkbox" name="opt" value="expert"> Сопровождение экспертизы</label>
+          <label><input type="checkbox" name="opt" value="data"> Сбор исходных данных</label>
+          <label><input type="checkbox" name="opt" value="watch"> Авторский надзор, отдельной строкой</label>
+          <label><input type="checkbox" name="tax"> С налогом 6%</label>
+          <label><input type="checkbox" name="rush"> Срочность</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Скидка менеджера</legend>
+        <div class="fields">
+          <label>Процент
+            <input name="discount" type="number" min="0" max="40" step="0.5" value="8" aria-describedby="discount-hint">
+          </label>
+          <label><input type="checkbox" name="permit"> Разрешение руководителя на скидку выше 10%</label>
+        </div>
+        <p class="hint" id="discount-hint">Без руководителя потолок 10%.</p>
+        <p class="warn" id="discount-warn" hidden></p>
+      </fieldset>
+    </form>
+
+    <section aria-labelledby="totals-caption">
+      <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="totals-caption">
+        <table class="totals" id="totals">
+          <caption id="totals-caption">Итог менеджера</caption>
+          <tbody>
+            <tr><th>Коммерческая цена</th><td id="sum-price">—</td></tr>
+            <tr id="tax-row" hidden><th>В том числе налог 6%</th><td id="sum-tax">—</td></tr>
+            <tr><th>Себестоимость</th><td id="sum-cost">—</td></tr>
+            <tr><th>Маржа</th><td id="sum-margin">—</td></tr>
+            <tr><th>Ориентир СБЦ</th><td id="sum-sbc">—</td></tr>
+            <tr><th>Состояние</th><td id="sum-state">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" id="state-note"></p>
+      <p class="hint">Ориентир СБЦ берётся со вкладки «Стоимость в СБЦ» и в коммерческое КП не попадает.</p>
+    </section>
+
+    <div class="toolbar">
+      <button type="button" id="save-card" class="quiet">Скачать карточку JSON</button>
+      <button type="button" id="open-kp">Показать КП</button>
+    </div>
+
+    <details>
+      <summary>Учебные ставки этого макета</summary>
+      <p>Руб/м до коэффициентов: В1 4 100, К1 3 900, К2 3 400, дренаж 2 400. Город ×1,08, стеснённые ×1,18, реконструкция ×1,22. Глубина 2–4 м ×1,12, глубже 4 м ×1,28. ГНБ ×1,35, продавливание ×1,5. Стадия коммерческого расчёта: П ×0,4, Р ×0,6, П+Р ×1. Это не доли СБЦ. Пакет «Базовый» фиксирует стадию Р и ×0,85, «Экспертиза» ×1,12 и включает сопровождение. Доля трассы 55%, у каждой следующей сети в коридоре она ×0,75. Себестоимость: 86 ч на 100 м и 60 ч на каждое сооружение, 2 500 ₽/ч, накладные ×1,25. Авторский надзор в эту себестоимость не входит. Налог 6% добавляется к коммерческой цене сверху и в маржу не закладывается. Цены сооружений живут в общей базе.</p>
+    </details>
+  </main>
+
+  <section class="wrap" id="book" hidden tabindex="-1">
+    <h1>Сооружения и переходы</h1>
+    <p class="lede">Общая база для всех объектов в этом браузере. Новая позиция, параметр и цена за единицу сразу попадают в карточки. Стартовые цены учебные.</p>
+    <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="book-caption">
+      <table id="book-table">
+        <caption id="book-caption">База</caption>
+        <thead>
+          <tr>
+            <th>Позиция</th>
+            <th>Параметр</th>
+            <th>Ед.</th>
+            <th class="num">Цена за единицу</th>
+            <th><span class="vh">Действие</span></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="hint" id="book-empty" hidden>В базе пока нет позиций. Добавьте первую ниже.</p>
+    <div class="toolbar">
+      <button type="button" id="download-book" class="quiet">Скачать базу JSON</button>
+    </div>
+    <form id="book-position" action="#book" method="post">
+      <fieldset>
+        <legend>Новая позиция</legend>
+        <div class="fields">
+          <label>Название
+            <input name="name" required autocomplete="off">
+          </label>
+          <label>Единица
+            <input name="unit" required value="шт." autocomplete="off">
+          </label>
+          <label>Первый параметр
+            <input name="parameter" required autocomplete="off">
+          </label>
+          <label>Цена за единицу, ₽
+            <input name="price" type="number" min="0" step="1" required>
+          </label>
+        </div>
+        <div class="toolbar">
+          <button type="submit">Добавить позицию</button>
+        </div>
+        <p class="warn" id="book-position-warn" hidden></p>
+      </fieldset>
+    </form>
+    <form id="book-variant" action="#book" method="post">
+      <fieldset>
+        <legend>Новый параметр</legend>
+        <div class="fields">
+          <label>Позиция
+            <select name="position" id="variant-position" required></select>
+          </label>
+          <label>Параметр
+            <input name="parameter" required autocomplete="off">
+          </label>
+          <label>Цена за единицу, ₽
+            <input name="price" type="number" min="0" step="1" required>
+          </label>
+        </div>
+        <div class="toolbar">
+          <button type="submit">Добавить параметр</button>
+        </div>
+        <p class="warn" id="book-variant-warn" hidden></p>
+      </fieldset>
+    </form>
+  </section>
+
+  <section class="wrap" id="sbc" hidden tabindex="-1">
+    <h1>Стоимость в СБЦ</h1>
+    <p class="lede">Отдельный расчёт проектных работ по СБЦП 81-2001-17 «Объекты водоснабжения и канализации». Табличные a и b даны в тысячах рублей на 01.01.2001. На IV квартал 2026 индекс проектных работ к этой базе — 7,22: письмо Минстроя от 26.10.2026 № 66866-ИФ/09 новый индекс ПИР не публикует, поэтому по письму от 25.12.2017 № 58300-ОГ/09 оставлен индекс III квартала (письмо от 23.07.2026 № 45358-ИФ/09). В коммерческую цену и в КП эта сумма не входит.</p>
+    <form id="sbc-form" action="#sbc" method="post">
+      <fieldset>
+        <legend>Множители справочника</legend>
+        <div class="fields">
+          <div class="choice">Стадия по пункту 1.7
+            <div class="choices">
+              <label><input type="radio" name="sbc-stage" value="p"> П, 60%</label>
+              <label><input type="radio" name="sbc-stage" value="r"> Р, 40%</label>
+              <label><input type="radio" name="sbc-stage" value="pr" checked> П+Р, 100%</label>
+            </div>
+          </div>
+          <label>Ценообразующий коэффициент
+            <input name="sbc-k" type="number" min="0" step="0.01" value="1" aria-describedby="sbc-k-hint">
+          </label>
+        </div>
+        <p class="hint" id="sbc-k-hint">1, если дополнительный коэффициент справочника не нужен. Диапазоны вроде «до 1,2» справочник не сводит к одному числу: значение выбираете вы.</p>
+      </fieldset>
+      <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-caption">
+        <table id="sbc-table">
+          <caption id="sbc-caption">Строки справочника</caption>
+          <thead>
+            <tr>
+              <th>Строка</th>
+              <th class="num">Показатель</th>
+              <th class="num">a</th>
+              <th class="num">b</th>
+              <th class="num">IV кв. 2026</th>
+              <th><span class="vh">Действие</span></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint" id="sbc-empty">Добавьте строку. В списке таблицы 3, 8, 18 и часть таблиц 16 и 17. Остальные пункты вводятся как своя строка: цена в тыс. руб. равна a + b × показатель, а если b пустое — a × показатель.</p>
+      <div class="toolbar">
+        <button type="button" id="add-sbc">Добавить строку</button>
+      </div>
+      <p class="warn" id="sbc-warn" hidden></p>
+    </form>
+    <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-total-caption">
+      <table class="totals">
+        <caption id="sbc-total-caption">Итог в ценах IV квартала 2026</caption>
+        <tbody>
+          <tr><th>База 2001, тыс. руб.</th><td id="sbc-base">—</td></tr>
+          <tr><th>После стадии и коэффициента, тыс. руб.</th><td id="sbc-factored">—</td></tr>
+          <tr><th>Текущая стоимость, × 7,22</th><td id="sbc-now">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <article id="proposal" hidden tabindex="-1">
+    <div class="letter-head">
+      <div>
+        <strong>Проектные работы</strong>
+        <div>Наружные сети В1, К1, К2 и дренаж</div>
+      </div>
+      <div id="kp-date"></div>
+    </div>
+    <h1>Коммерческое предложение</h1>
+    <p id="kp-intro"></p>
+    <table>
+      <caption class="vh">Состав и стоимость для заказчика</caption>
+      <thead>
+        <tr><th>Состав работ</th><th class="num">Количество</th><th class="num">Сумма</th></tr>
+      </thead>
+      <tbody id="kp-lines"></tbody>
+    </table>
+    <p id="kp-foot"></p>
+    <div class="sheet-actions">
+      <button type="button" id="back-desk" class="quiet">Вернуться к расчёту</button>
+      <button type="button" id="print-kp">Печать</button>
+    </div>
+  </article>
+
+  <template id="section-template">
+    <tr>
+      <th><span class="swatch" data-net="v1" aria-hidden="true"></span>
+        <select name="type" aria-label="Тип сети">
+          <option value="v1" selected>В1</option>
+          <option value="k1">К1</option>
+          <option value="k2">К2</option>
+          <option value="drain">Дренаж</option>
+        </select>
+      </th>
+      <td data-label="Длина, м"><input name="length" type="number" min="0" step="1" value="100" aria-label="Длина, м"></td>
+      <td data-label="Диаметр, мм"><input name="diameter" type="number" min="1" step="1" value="160" aria-label="Диаметр, мм"></td>
+      <td data-label="Условия"><select name="place" aria-label="Условия"><option value="field">Поле</option><option value="city" selected>Город</option><option value="tight">Стеснённые</option><option value="recon">Реконструкция</option></select></td>
+      <td data-label="Глубина"><select name="depth" aria-label="Глубина"><option value="d2" selected>до 2 м</option><option value="d4">2–4 м</option><option value="deep">глубже 4 м</option></select></td>
+      <td data-label="Способ"><select name="method" aria-label="Способ"><option value="open" selected>Открытая</option><option value="hdd">ГНБ</option><option value="punch">Продавливание</option></select></td>
+      <td class="num line-sum" data-label="Сумма">—</td>
+      <td data-label="Действие"><button type="button" class="icon-btn remove-section">Удалить</button></td>
+    </tr>
+  </template>
+  <template id="point-template">
+    <tr>
+      <th><select name="point" aria-label="Позиция"></select></th>
+      <td data-label="Параметр"><select name="variant" aria-label="Параметр"></select></td>
+      <td data-label="Количество"><input name="qty" type="number" min="0" step="1" value="1" aria-label="Количество"></td>
+      <td class="num unit-price" data-label="Цена за единицу">—</td>
+      <td class="num line-sum" data-label="Сумма">—</td>
+      <td data-label="Действие"><button type="button" class="icon-btn remove-point">Удалить</button></td>
+    </tr>
+  </template>
+
+  <script>
+    const RATE = { v1: 4100, k1: 3900, k2: 3400, drain: 2400 };
+    const PLACE = { field: 1, city: 1.08, tight: 1.18, recon: 1.22 };
+    const DEPTH = { d2: 1, d4: 1.12, deep: 1.28 };
+    const METHOD = { open: 1, hdd: 1.35, punch: 1.5 };
+    const STAGE = { p: 0.4, r: 0.6, pr: 1 };
+    const PACK = { basic: 0.85, standard: 1, expert: 1.12 };
+    const OPT = { bim: 220000, expert: 160000, data: 90000, watch: 180000 };
+    const OUTSIDE_COST = new Set(["watch"]);
+    const NAME = { v1: "Водоснабжение В1", k1: "Канализация К1", k2: "Дождевая канализация К2", drain: "Дренаж", bim: "BIM в Civil 3D", expert: "Сопровождение экспертизы", data: "Сбор исходных данных", watch: "Авторский надзор" };
+    const BOOK_KEY = "pir-structure-book-v1";
+    const SBC_KEY = "pir-sbc-sheet-v1";
+    const SBC_INDEX = 7.22;
+    const SBC_STAGE = { p: 0.6, r: 0.4, pr: 1 };
+    const SEED = [
+      { id: "kns", name: "КНС", unit: "шт.", variants: [{ id: "kns-24", parameter: "24 м³/ч", price: 520000 }] },
+      { id: "vns", name: "ВНС", unit: "шт.", variants: [{ id: "vns-std", parameter: "по производительности", price: 480000 }] },
+      { id: "los", name: "Локальные очистные", unit: "шт.", variants: [{ id: "los-std", parameter: "локальные", price: 640000 }] },
+      { id: "duker", name: "Дюкер", unit: "шт.", variants: [{ id: "duker-1", parameter: "один переход", price: 260000 }] },
+      { id: "cross", name: "Переход", unit: "шт.", variants: [{ id: "cross-road", parameter: "автодорога", price: 210000 }] }
+    ];
+    const STAGE_NAME = { p: "П", r: "Р", pr: "П+Р" };
+    const PACK_NAME = { basic: "Базовый", standard: "Стандарт", expert: "Экспертиза" };
+
+    const money = new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 });
+    const pct = new Intl.NumberFormat("ru-RU", { style: "percent", maximumFractionDigits: 1 });
+    const form = document.querySelector("#card");
+    const kpButton = document.querySelector("#tab-kp");
+
+    function val(name) {
+      const el = form.elements[name];
+      if (!el) return "";
+      if (el instanceof RadioNodeList) return el.value;
+      return el.value;
+    }
+
+    function checkedOpts() {
+      return [...form.querySelectorAll("input[name=opt]:checked")].map((el) => el.value);
+    }
+
+    function syncPackage() {
+      const pack = val("package");
+      const expert = form.querySelector("input[value=expert]");
+      const stages = [...form.querySelectorAll("input[name=stage]")];
+      if (pack === "basic") {
+        form.elements.stage.value = "r";
+        stages.forEach((el) => { el.disabled = el.value !== "r"; });
+      } else {
+        stages.forEach((el) => { el.disabled = false; });
+      }
+      if (pack === "expert") {
+        expert.checked = true;
+        expert.disabled = true;
+      } else {
+        expert.disabled = false;
+      }
+    }
+
+    function sectionRows() {
+      return [...document.querySelectorAll("#sections tbody tr")].map((row) => ({
+        row,
+        type: row.querySelector("[name=type]").value,
+        length: Number(row.querySelector("[name=length]").value) || 0,
+        place: row.querySelector("[name=place]").value,
+        depth: row.querySelector("[name=depth]").value,
+        method: row.querySelector("[name=method]").value
+      }));
+    }
+
+    function quote() {
+      syncPackage();
+      const stage = val("stage");
+      const pack = val("package");
+      const factor = STAGE[stage] * PACK[pack];
+      const sections = sectionRows().map((item, index) => {
+        const base = item.length * RATE[item.type] * PLACE[item.place] * DEPTH[item.depth] * METHOD[item.method] * factor;
+        const routeCut = index === 0 ? 0 : base * 0.55 * 0.25;
+        const sum = Math.round(base - routeCut);
+        return { ...item, sum };
+      });
+      const points = [...document.querySelectorAll("#points tbody tr")].map((row) => {
+        const position = catalog.find((item) => item.id === row.querySelector("[name=point]").value);
+        const variant = position?.variants.find((item) => item.id === row.querySelector("[name=variant]").value);
+        const qty = Number(row.querySelector("[name=qty]").value) || 0;
+        const missing = !variant;
+        return {
+          row,
+          name: missing ? "Нет в базе" : position.name,
+          param: variant?.parameter || "",
+          unit: position?.unit || "шт.",
+          qty,
+          sum: missing ? 0 : Math.round(qty * variant.price),
+          missing,
+          price: variant?.price || 0
+        };
+      });
+      const opts = checkedOpts().map((kind) => ({ kind, sum: OPT[kind], outside: OUTSIDE_COST.has(kind) }));
+      const rush = form.elements.rush.checked;
+      const networks = sections.reduce((acc, item) => acc + item.sum, 0);
+      const pointSum = points.reduce((acc, item) => acc + item.sum, 0);
+      const optIn = opts.filter((item) => !item.outside).reduce((acc, item) => acc + item.sum, 0);
+      const optOut = opts.filter((item) => item.outside).reduce((acc, item) => acc + item.sum, 0);
+      const before = Math.round((networks + pointSum + optIn) * (rush ? 1.08 : 1) + optOut);
+      let asked = Number(form.elements.discount.value);
+      if (!Number.isFinite(asked) || asked < 0) asked = 0;
+      const permit = form.elements.permit.checked;
+      const warn = document.querySelector("#discount-warn");
+      let discount = asked;
+      if (asked > 10 && !permit) {
+        discount = 10;
+        warn.hidden = false;
+        warn.textContent = "Потолок скидки менеджера 10%. Сейчас применено 10%. Выше — только с разрешением руководителя.";
+      } else if (asked > 40) {
+        discount = 40;
+        warn.hidden = false;
+        warn.textContent = "В макете скидка ограничена 40%.";
+      } else {
+        warn.hidden = true;
+        warn.textContent = "";
+      }
+      const net = Math.round(before * (1 - discount / 100));
+      const taxOn = form.elements.tax.checked;
+      const taxSum = taxOn ? Math.round(net * 0.06) : 0;
+      const price = net + taxSum;
+      const length = sections.reduce((acc, item) => acc + item.length, 0);
+      const designPrice = Math.round((networks + pointSum + optIn) * (rush ? 1.08 : 1) * (1 - discount / 100));
+      const pointQty = points.reduce((acc, item) => acc + item.qty, 0);
+      const hours = (length / 100) * 86 + pointQty * 60;
+      const cost = Math.round(hours * 2500 * 1.25);
+      const margin = designPrice > 0 ? (designPrice - cost) / designPrice : 0;
+      const designBefore = Math.round((networks + pointSum + optIn) * (rush ? 1.08 : 1));
+      const rushSum = rush ? Math.round((networks + pointSum + optIn) * 0.08) : 0;
+      const sbcNow = sbcQuote().now;
+      const empty = sections.length === 0;
+      let tone = "go";
+      let short = "Можно в КП";
+      let note = "Цена не ниже себестоимости, маржа не ниже цели 35%.";
+      if (empty || price <= 0) {
+        tone = "wait";
+        short = "Проверить";
+        note = "Нет участков. Добавьте сеть, чтобы собрать цену.";
+      } else if (designPrice < cost) {
+        tone = "stop";
+        short = "Стоп";
+        note = "Цена проектирования ниже себестоимости. В КП такую сумму не выгружаем без разрешения руководителя.";
+      } else if (margin < 0.35) {
+        tone = "wait";
+        short = "Проверить";
+        note = margin < 0.2
+          ? "Маржа ниже пола 20%. Коммерческое КП открывается, отправлять его без руководителя не следует."
+          : "Маржа ниже цели 35%. Пол 20% ещё держится.";
+      }
+      return { sections, points, opts, rush, rushSum, discount, price, net, taxOn, taxSum, cost, margin, sbcNow, tone, short, note, before, designPrice, empty };
+    }
+
+    function paint() {
+      const q = quote();
+      q.sections.forEach((item) => {
+        item.row.querySelector(".line-sum").textContent = money.format(item.sum);
+        const swatch = item.row.querySelector(".swatch");
+        swatch.dataset.net = item.type;
+      });
+      q.points.forEach((item) => {
+        item.row.querySelector(".unit-price").textContent = item.missing ? "нет в базе" : money.format(item.price);
+        item.row.querySelector(".line-sum").textContent = money.format(item.sum);
+      });
+      document.querySelector("#sections-empty").hidden = !q.empty;
+      document.querySelector("#sum-price").textContent = money.format(q.price);
+      document.querySelector("#tax-row").hidden = !q.taxOn;
+      document.querySelector("#sum-tax").textContent = q.taxOn ? money.format(q.taxSum) : "—";
+      document.querySelector("#sum-cost").textContent = money.format(q.cost);
+      document.querySelector("#sum-margin").textContent = q.designPrice > 0 ? pct.format(q.margin) : "—";
+      document.querySelector("#sum-sbc").textContent = q.sbcNow > 0 ? money.format(q.sbcNow) : "нет расчёта";
+      document.querySelector("#sum-state").textContent = q.short;
+      document.querySelector("#state-note").textContent = q.note;
+      document.querySelectorAll("#signal span").forEach((el) => {
+        const on = el.dataset.tone === q.tone;
+        el.dataset.on = on ? "true" : "false";
+      });
+      document.querySelector("#signal").setAttribute("aria-label", q.short + ". " + q.note);
+      const blocked = q.tone === "stop";
+      kpButton.disabled = blocked;
+      kpButton.title = blocked ? q.note : "";
+      document.querySelector("#object-title").textContent = val("object") || "Без названия";
+      paintProposal(q);
+    }
+
+    function paintProposal(q) {
+      const until = new Date();
+      until.setDate(until.getDate() + 30);
+      const stage = STAGE_NAME[val("stage")];
+      const pack = PACK_NAME[val("package")];
+      document.querySelector("#kp-date").textContent = "Цена действует до " + until.toLocaleDateString("ru-RU");
+      document.querySelector("#kp-intro").textContent = `${val("customer")}. ${val("object")}, ${val("address")}. Стадия ${stage}, пакет «${pack}». Черновик: ставки учебные, для договора не используются.`;
+      const lines = [];
+      q.sections.forEach((item) => {
+        lines.push([NAME[item.type], item.length + " м", item.sum]);
+      });
+      q.points.forEach((item) => {
+        const title = item.missing ? "Позиция не найдена в базе" : item.name + (item.param ? ", " + item.param : "");
+        lines.push([title, item.qty + " " + item.unit, item.sum]);
+      });
+      q.opts.forEach((item) => lines.push([NAME[item.kind], "1", item.sum]));
+      if (q.rush) lines.push(["Срочность", "8%", q.rushSum]);
+      const body = document.querySelector("#kp-lines");
+      body.replaceChildren();
+      if (lines.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 3;
+        td.textContent = "В предложении пока нет строк. Вернитесь к расчёту и добавьте участок.";
+        tr.append(td);
+        body.append(tr);
+      }
+      lines.forEach(([name, qty, sum]) => {
+        const tr = document.createElement("tr");
+        const a = document.createElement("td");
+        const b = document.createElement("td");
+        const c = document.createElement("td");
+        a.textContent = name;
+        b.textContent = qty;
+        b.className = "num";
+        c.textContent = money.format(sum);
+        c.className = "num";
+        tr.append(a, b, c);
+        body.append(tr);
+      });
+      if (q.discount > 0 && lines.length) {
+        const tr = document.createElement("tr");
+        const a = document.createElement("td");
+        const b = document.createElement("td");
+        const c = document.createElement("td");
+        a.textContent = "Скидка";
+        b.textContent = pct.format(q.discount / 100);
+        b.className = "num";
+        c.textContent = money.format(q.net - q.before);
+        c.className = "num";
+        tr.append(a, b, c);
+        body.append(tr);
+      }
+      if (q.taxOn && lines.length) {
+        const tr = document.createElement("tr");
+        const a = document.createElement("td");
+        const b = document.createElement("td");
+        const c = document.createElement("td");
+        a.textContent = "Налог 6%";
+        b.textContent = "6%";
+        b.className = "num";
+        c.textContent = money.format(q.taxSum);
+        c.className = "num";
+        tr.append(a, b, c);
+        body.append(tr);
+      }
+      const total = document.createElement("tr");
+      total.className = "sum-row";
+      const ta = document.createElement("td");
+      const tb = document.createElement("td");
+      const tc = document.createElement("td");
+      ta.textContent = "Итого";
+      tb.textContent = "";
+      tc.textContent = money.format(q.price);
+      tc.className = "num";
+      total.append(ta, tb, tc);
+      body.append(total);
+      document.querySelector("#kp-foot").textContent = q.taxOn
+        ? "Итог включает налог 6%. Срок действия цены указан выше. Учебный макет не является офертой."
+        : "В стоимость входят проектные работы по перечисленным сетям и сооружениям. Срок действия цены указан выше. Учебный макет не является офертой.";
+    }
+
+    function show(view) {
+      const panels = { desk: "#desk", book: "#book", sbc: "#sbc", kp: "#proposal" };
+      const tabs = { desk: "#tab-desk", book: "#tab-book", sbc: "#tab-sbc", kp: "#tab-kp" };
+      Object.entries(panels).forEach(([name, selector]) => {
+        document.querySelector(selector).hidden = name !== view;
+      });
+      Object.entries(tabs).forEach(([name, selector]) => {
+        document.querySelector(selector).setAttribute("aria-selected", name === view ? "true" : "false");
+      });
+      if (view !== "desk") document.querySelector(panels[view]).focus();
+    }
+
+    form.addEventListener("input", paint);
+    form.addEventListener("change", (event) => {
+      if (event.target.name === "point") fillPointRow(event.target.closest("tr"), event.target.value, "", false);
+      paint();
+    });
+    form.addEventListener("submit", (event) => event.preventDefault());
+    form.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      if (button.classList.contains("remove-section") || button.classList.contains("remove-point")) {
+        button.closest("tr").remove();
+        paint();
+      }
+    });
+    document.querySelector("#add-section").addEventListener("click", () => {
+      document.querySelector("#sections tbody").append(document.querySelector("#section-template").content.cloneNode(true));
+      paint();
+    });
+    document.querySelector("#add-point").addEventListener("click", () => {
+      document.querySelector("#points tbody").append(document.querySelector("#point-template").content.cloneNode(true));
+      const row = document.querySelector("#points tbody tr:last-child");
+      fillPointRow(row, catalog[0]?.id || "", catalog[0]?.variants[0]?.id || "", false);
+      paint();
+    });
+    document.querySelector("#tab-desk").addEventListener("click", () => show("desk"));
+    document.querySelector("#tab-book").addEventListener("click", () => show("book"));
+    document.querySelector("#tab-sbc").addEventListener("click", () => show("sbc"));
+    document.querySelector("#back-desk").addEventListener("click", () => show("desk"));
+    function openKp() {
+      if (kpButton.disabled) return;
+      show("kp");
+    }
+    kpButton.addEventListener("click", openKp);
+    document.querySelector("#open-kp").addEventListener("click", openKp);
+    document.querySelector("#print-kp").addEventListener("click", () => window.print());
+    document.querySelector("#save-card").addEventListener("click", () => {
+      const q = quote();
+      const card = {
+        synthetic: true,
+        note: "Учебный макет. Суммы не из прайса компании.",
+        object: val("object"),
+        customer: val("customer"),
+        address: val("address"),
+        stage: val("stage"),
+        package: val("package"),
+        commercial: q.price,
+        cost: q.cost,
+        margin: Number(q.margin.toFixed(4)),
+        tax6: q.taxOn,
+        sbcCurrent: q.sbcNow,
+        state: q.tone
+      };
+      const blob = new Blob([JSON.stringify(card, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "raschet-uchebny.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+    const SBC_ROWS = [
+      row("t3-1", "Табл. 3. Водовод", "Подземный, 300–1000 м³/ч, до 10 км", "км", 64.94, 34.77, 0, 10),
+      row("t3-2", "Табл. 3. Водовод", "Подземный, 300–1000 м³/ч, 10–22 км", "км", 225, 18.76, 10, 22),
+      row("t3-3", "Табл. 3. Водовод", "Подземный, 300–1000 м³/ч, 22–132 км", "км", 537.18, 4.57, 22, 132),
+      row("t3-4", "Табл. 3. Водовод", "Подземный, 300–1000 м³/ч, свыше 132 км", "км", 597.9, 4.11, 132, null),
+      row("t3-5", "Табл. 3. Водовод", "Подземный, 1000–5000 м³/ч, до 5 км", "км", 65.34, 67.26, 0, 5),
+      row("t3-6", "Табл. 3. Водовод", "Подземный, 1000–5000 м³/ч, 5–11 км", "км", 218.64, 36.6, 5, 11),
+      row("t3-7", "Табл. 3. Водовод", "Подземный, 1000–5000 м³/ч, 11–67 км", "км", 522.57, 8.97, 11, 67),
+      row("t3-8", "Табл. 3. Водовод", "Подземный, 1000–5000 м³/ч, свыше 67 км", "км", 571.48, 8.24, 67, null),
+      row("t3-9", "Табл. 3. Водовод", "Подземный, свыше 5000 м³/ч, до 4 км", "км", 65.03, 151.54, 0, 4),
+      row("t3-13", "Табл. 3. Водовод", "Надземный, 300–1000 м³/ч, до 19 км", "км", 50.38, 51.79, 0, 19),
+      row("t3-22", "Табл. 3. Водовод", "Камера переключения, расход до 2000 м³/ч", "шт.", 29.19, null, 0, null),
+      row("t3-23", "Табл. 3. Водовод", "Камера переключения, 2000–5000 м³/ч", "шт.", 40.66, null, 0, null),
+      row("t8-1", "Табл. 8. Коллектор", "Незастроенная территория, до 500 м³/ч, рельеф I", "км", 96.3, 14.1, 0, null),
+      row("t8-4", "Табл. 8. Коллектор", "Незастроенная территория, 500–3000 м³/ч, рельеф I", "км", 114.69, 16.85, 0, null),
+      row("t8-7", "Табл. 8. Коллектор", "Незастроенная территория, 3000–10000 м³/ч, рельеф I", "км", 127.34, 24.73, 0, null),
+      row("t8-13", "Табл. 8. Коллектор", "ГНБ, 100–1000 м", "м", 47.8, 0.18, 100, 1000),
+      row("t8-14", "Табл. 8. Коллектор", "Прессошнековое бурение, 100–1000 м", "м", 141.6, 0.18, 100, 1000),
+      row("t16-1", "Табл. 16. Сети В1, тип I", "Расход 10 м³/ч", "км", 4.54, 10.46, 0, null),
+      row("t16-3", "Табл. 16. Сети В1, тип I", "Расход 50 м³/ч", "км", 12.73, 10.27, 0, null),
+      row("t16-5", "Табл. 16. Сети В1, тип I", "Расход 100 м³/ч", "км", 20.76, 10.16, 0, null),
+      row("t16-6", "Табл. 16. Сети В1, тип I", "Расход 200 м³/ч", "км", 29.87, 10.13, 0, null),
+      row("t17-1", "Табл. 17. Сети К, группа I", "Расход 14 м³/ч", "км", 5.97, 15.35, 0, null),
+      row("t17-3", "Табл. 17. Сети К, группа I", "Расход 60 м³/ч", "км", 16.56, 15.05, 0, null),
+      row("t17-5", "Табл. 17. Сети К, группа I", "Расход 160 м³/ч", "км", 29.62, 14.91, 0, null),
+      row("t18-1", "Табл. 18. Дренаж", "Кольцевой, до 1000 м", "м", 4.6, 0.166, 0, 1000),
+      row("t18-2", "Табл. 18. Дренаж", "Кольцевой, свыше 1000 м", "м", 155.6, 0.015, 1000, null),
+      row("t18-3", "Табл. 18. Дренаж", "Пластовый, до 5000 м²", "м²", 2.29, 0.018, 0, 5000),
+      row("t18-4", "Табл. 18. Дренаж", "Пластовый, свыше 5000 м²", "м²", 78.29, 0.0028, 5000, null),
+      row("custom", "Своя строка", "Своя строка a и b", "показатель", null, null, null, null)
+    ];
+
+    let catalog = loadBook();
+    let sbcLines = loadSbc();
+
+    function row(id, group, name, unit, a, b, min, max) {
+      return { id, group, name, unit, a, b, min, max };
+    }
+
+    function uid(prefix) {
+      return prefix + "-" + Math.random().toString(36).slice(2, 8);
+    }
+
+    function loadBook() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(BOOK_KEY) || "null");
+        if (Array.isArray(parsed) && parsed.every((item) => item && item.id && Array.isArray(item.variants))) return parsed;
+      } catch (error) { /* учебный набор */ }
+      return JSON.parse(JSON.stringify(SEED));
+    }
+
+    function persistBook() {
+      localStorage.setItem(BOOK_KEY, JSON.stringify(catalog));
+    }
+
+    function loadSbc() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(SBC_KEY) || "null");
+        if (parsed && Array.isArray(parsed.lines)) return parsed.lines;
+      } catch (error) { /* пустой лист */ }
+      return [];
+    }
+
+    function persistSbc() {
+      const stage = document.querySelector("input[name=sbc-stage]:checked")?.value || "pr";
+      const k = document.querySelector("[name=sbc-k]")?.value || "1";
+      localStorage.setItem(SBC_KEY, JSON.stringify({ stage, k, lines: sbcLines }));
+    }
+
+    function fillPointRow(row, positionId, variantId, keepVariant) {
+      const pos = row.querySelector("[name=point]");
+      const variant = row.querySelector("[name=variant]");
+      const pid = positionId || pos.dataset.selected || catalog[0]?.id || "";
+      pos.replaceChildren();
+      catalog.forEach((item) => {
+        const opt = document.createElement("option");
+        opt.value = item.id;
+        opt.textContent = item.name;
+        pos.append(opt);
+      });
+      if ([...pos.options].some((opt) => opt.value === pid)) pos.value = pid;
+      const item = catalog.find((entry) => entry.id === pos.value);
+      const preferred = keepVariant ? (variantId || variant.value || variant.dataset.selected || "") : (variantId || "");
+      variant.replaceChildren();
+      (item?.variants || []).forEach((entry) => {
+        const opt = document.createElement("option");
+        opt.value = entry.id;
+        opt.textContent = entry.parameter;
+        variant.append(opt);
+      });
+      if ([...variant.options].some((opt) => opt.value === preferred)) variant.value = preferred;
+      delete pos.dataset.selected;
+      delete variant.dataset.selected;
+    }
+
+    function renderBook() {
+      const body = document.querySelector("#book-table tbody");
+      body.replaceChildren();
+      catalog.forEach((position) => {
+        position.variants.forEach((variant) => {
+          const tr = document.createElement("tr");
+          const name = document.createElement("td");
+          const param = document.createElement("td");
+          const unit = document.createElement("td");
+          const priceCell = document.createElement("td");
+          const action = document.createElement("td");
+          name.textContent = position.name;
+          param.textContent = variant.parameter;
+          unit.textContent = position.unit;
+          const price = document.createElement("input");
+          price.type = "number";
+          price.min = "0";
+          price.step = "1";
+          price.value = String(variant.price);
+          price.setAttribute("aria-label", "Цена " + position.name + ", " + variant.parameter);
+          price.addEventListener("input", () => {
+            variant.price = Number(price.value) || 0;
+            persistBook();
+            paint();
+          });
+          priceCell.className = "num";
+          priceCell.append(price);
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "icon-btn";
+          remove.textContent = "Удалить";
+          remove.addEventListener("click", () => {
+            position.variants = position.variants.filter((item) => item.id !== variant.id);
+            if (!position.variants.length) catalog = catalog.filter((item) => item.id !== position.id);
+            persistBook();
+            renderBook();
+            document.querySelectorAll("#points tbody tr").forEach((pointRow) => {
+              fillPointRow(pointRow, pointRow.querySelector("[name=point]").value, pointRow.querySelector("[name=variant]").value, true);
+            });
+            paint();
+          });
+          action.append(remove);
+          tr.append(name, param, unit, priceCell, action);
+          body.append(tr);
+        });
+      });
+      document.querySelector("#book-empty").hidden = catalog.some((item) => item.variants.length);
+      const select = document.querySelector("#variant-position");
+      const current = select.value;
+      select.replaceChildren();
+      catalog.forEach((position) => {
+        const opt = document.createElement("option");
+        opt.value = position.id;
+        opt.textContent = position.name;
+        select.append(opt);
+      });
+      if ([...select.options].some((opt) => opt.value === current)) select.value = current;
+    }
+
+    function sbcQuote() {
+      const stage = document.querySelector("input[name=sbc-stage]:checked")?.value || "pr";
+      const rawK = Number(document.querySelector("[name=sbc-k]")?.value);
+      const extra = Number.isFinite(rawK) && rawK >= 0 ? rawK : 1;
+      const warnings = [];
+      let base = 0;
+      let factored = 0;
+      let now = 0;
+      const lines = sbcLines.map((line) => {
+        const source = SBC_ROWS.find((item) => item.id === line.rowId) || SBC_ROWS[0];
+        const custom = line.rowId === "custom";
+        const a = custom ? Number(line.a) || 0 : source.a;
+        const b = custom ? (line.b === null || line.b === "" ? null : Number(line.b)) : source.b;
+        const x = Number(line.x) || 0;
+        const thousand = (b === null ? a * x : a + b * x) * SBC_STAGE[stage] * extra;
+        const current = Math.round(thousand * SBC_INDEX * 1000);
+        if (!custom && source.max !== null && x > source.max) warnings.push("«" + source.name + "»: показатель выше интервала строки.");
+        if (!custom && source.min !== null && source.min > 0 && x < source.min) warnings.push("«" + source.name + "»: показатель ниже интервала строки.");
+        base += b === null ? a * x : a + b * x;
+        factored += thousand;
+        now += current;
+        return { line, source, custom, a, b, x, current };
+      });
+      return { lines, base, factored, now, warnings };
+    }
+
+    function renderSbc() {
+      const body = document.querySelector("#sbc-table tbody");
+      body.replaceChildren();
+      const sheet = sbcQuote();
+      sheet.lines.forEach((item) => {
+        const tr = document.createElement("tr");
+        const choice = document.createElement("td");
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", "Строка справочника");
+        let group = null;
+        let container = select;
+        SBC_ROWS.forEach((source) => {
+          if (source.group !== group) {
+            group = source.group;
+            container = document.createElement("optgroup");
+            container.label = group;
+            select.append(container);
+          }
+          const opt = document.createElement("option");
+          opt.value = source.id;
+          opt.textContent = source.name;
+          container.append(opt);
+        });
+        select.value = item.line.rowId;
+        select.addEventListener("change", () => {
+          item.line.rowId = select.value;
+          const source = SBC_ROWS.find((entry) => entry.id === select.value);
+          if (source && source.id !== "custom") {
+            item.line.a = source.a;
+            item.line.b = source.b;
+          }
+          persistSbc();
+          renderSbc();
+          paint();
+        });
+        choice.append(select);
+        if (item.custom) {
+          const name = document.createElement("input");
+          name.type = "text";
+          name.value = item.line.customName || "";
+          name.placeholder = "Название строки";
+          name.setAttribute("aria-label", "Название своей строки");
+          name.addEventListener("input", () => { item.line.customName = name.value; persistSbc(); paint(); });
+          choice.append(name);
+        }
+        const xCell = document.createElement("td");
+        const x = document.createElement("input");
+        x.type = "number";
+        x.min = "0";
+        x.step = "0.01";
+        x.value = String(item.line.x);
+        x.setAttribute("aria-label", "Натуральный показатель, " + (item.custom ? "показатель" : item.source.unit));
+        x.addEventListener("input", () => { item.line.x = Number(x.value) || 0; persistSbc(); paint(); renderSbcTotals(); });
+        xCell.append(x);
+        const aCell = document.createElement("td");
+        const bCell = document.createElement("td");
+        aCell.className = "num";
+        bCell.className = "num";
+        if (item.custom) {
+          const a = document.createElement("input");
+          const b = document.createElement("input");
+          a.type = "number"; b.type = "number"; a.step = "0.01"; b.step = "0.01";
+          a.value = item.line.a ?? ""; b.value = item.line.b ?? "";
+          a.setAttribute("aria-label", "a, тыс. руб."); b.setAttribute("aria-label", "b, тыс. руб.");
+          a.addEventListener("input", () => { item.line.a = Number(a.value) || 0; persistSbc(); paint(); renderSbcTotals(); });
+          b.addEventListener("input", () => { item.line.b = b.value === "" ? null : Number(b.value); persistSbc(); paint(); renderSbcTotals(); });
+          aCell.append(a); bCell.append(b);
+        } else {
+          aCell.textContent = String(item.a).replace(".", ",");
+          bCell.textContent = item.b === null ? "—" : String(item.b).replace(".", ",");
+        }
+        const sum = document.createElement("td");
+        sum.className = "num line-sum";
+        sum.textContent = money.format(item.current);
+        const action = document.createElement("td");
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "icon-btn";
+        remove.textContent = "Удалить";
+        remove.addEventListener("click", () => {
+          sbcLines = sbcLines.filter((entry) => entry.id !== item.line.id);
+          persistSbc();
+          renderSbc();
+          paint();
+        });
+        action.append(remove);
+        tr.append(choice, xCell, aCell, bCell, sum, action);
+        body.append(tr);
+      });
+      document.querySelector("#sbc-empty").hidden = sbcLines.length > 0;
+      renderSbcTotals();
+    }
+
+    function renderSbcTotals() {
+      const sheet = sbcQuote();
+      const num = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.querySelector("#sbc-base").textContent = sbcLines.length ? num.format(sheet.base) : "—";
+      document.querySelector("#sbc-factored").textContent = sbcLines.length ? num.format(sheet.factored) : "—";
+      document.querySelector("#sbc-now").textContent = sbcLines.length ? money.format(sheet.now) : "—";
+      const warn = document.querySelector("#sbc-warn");
+      warn.hidden = sheet.warnings.length === 0;
+      warn.textContent = sheet.warnings.join(" ");
+      document.querySelectorAll("#sbc-table tbody tr").forEach((tr, index) => {
+        const cell = tr.querySelector(".line-sum");
+        if (cell && sheet.lines[index]) cell.textContent = money.format(sheet.lines[index].current);
+      });
+    }
+
+    document.querySelector("#book-position").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(event.target);
+      const name = String(data.get("name") || "").trim();
+      const unit = String(data.get("unit") || "").trim();
+      const parameter = String(data.get("parameter") || "").trim();
+      const price = Number(data.get("price"));
+      const warn = document.querySelector("#book-position-warn");
+      if (!name || !unit || !parameter || !Number.isFinite(price) || price < 0) {
+        warn.hidden = false;
+        warn.textContent = "Заполните название, единицу, параметр и цену.";
+        return;
+      }
+      warn.hidden = true;
+      catalog.push({ id: uid("pos"), name, unit, variants: [{ id: uid("var"), parameter, price }] });
+      persistBook();
+      renderBook();
+      document.querySelectorAll("#points tbody tr").forEach((pointRow) => {
+        fillPointRow(pointRow, pointRow.querySelector("[name=point]").value, pointRow.querySelector("[name=variant]").value, true);
+      });
+      event.target.reset();
+      event.target.elements.unit.value = "шт.";
+      paint();
+    });
+
+    document.querySelector("#book-variant").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(event.target);
+      const position = catalog.find((item) => item.id === data.get("position"));
+      const parameter = String(data.get("parameter") || "").trim();
+      const price = Number(data.get("price"));
+      const warn = document.querySelector("#book-variant-warn");
+      if (!position || !parameter || !Number.isFinite(price) || price < 0) {
+        warn.hidden = false;
+        warn.textContent = "Выберите позицию и заполните параметр с ценой.";
+        return;
+      }
+      warn.hidden = true;
+      position.variants.push({ id: uid("var"), parameter, price });
+      persistBook();
+      renderBook();
+      document.querySelectorAll("#points tbody tr").forEach((pointRow) => {
+        fillPointRow(pointRow, pointRow.querySelector("[name=point]").value, pointRow.querySelector("[name=variant]").value, true);
+      });
+      event.target.elements.parameter.value = "";
+      event.target.elements.price.value = "";
+      paint();
+    });
+
+    document.querySelector("#download-book").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify({ status: "база макета", positions: catalog }, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "structures.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+    document.querySelector("#add-sbc").addEventListener("click", () => {
+      sbcLines.push({ id: uid("sbc"), rowId: "t3-1", x: 1, a: 64.94, b: 34.77, customName: "" });
+      persistSbc();
+      renderSbc();
+      paint();
+    });
+
+    document.querySelector("#sbc-form").addEventListener("input", () => { persistSbc(); paint(); renderSbcTotals(); });
+    document.querySelector("#sbc-form").addEventListener("submit", (event) => event.preventDefault());
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(SBC_KEY) || "null");
+      if (saved?.stage) document.querySelector(`input[name=sbc-stage][value="${saved.stage}"]`).checked = true;
+      if (saved?.k !== undefined) document.querySelector("[name=sbc-k]").value = saved.k;
+    } catch (error) { /* остаются значения формы */ }
+
+    document.querySelectorAll("#points tbody tr").forEach((pointRow) => {
+      fillPointRow(pointRow, pointRow.querySelector("[name=point]").dataset.selected, pointRow.querySelector("[name=variant]").dataset.selected, true);
+    });
+    renderBook();
+    renderSbc();
+    paint();
+  </script>
+</body>
+</html>

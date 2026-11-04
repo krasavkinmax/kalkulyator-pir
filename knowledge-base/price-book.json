@@ -1,0 +1,176 @@
+{
+  "status": "нужна калибровка",
+  "version": null,
+  "currency": "RUB",
+  "note": "Денежные поля пустые. Ставку добавляют только с источником: номер договора или явное указание и дата. Предложения из pricing-policy.md сюда не переносятся, пока не утверждены.",
+  "axes": {
+    "networkTypes": [
+      { "id": "V1", "label": "Водоснабжение" },
+      { "id": "K1", "label": "Хоз-бытовая канализация" },
+      { "id": "K2", "label": "Дождевая канализация" },
+      { "id": "drainage", "label": "Дренаж" }
+    ],
+    "diameterBandsMm": [
+      { "id": "to110", "label": "до 110", "minExclusive": null, "maxInclusive": 110 },
+      { "id": "111to225", "label": "111–225", "minExclusive": 110, "maxInclusive": 225 },
+      { "id": "226to400", "label": "226–400", "minExclusive": 225, "maxInclusive": 400 },
+      { "id": "401to630", "label": "401–630", "minExclusive": 400, "maxInclusive": 630 },
+      { "id": "631to1000", "label": "631–1000", "minExclusive": 630, "maxInclusive": 1000 },
+      { "id": "over1000", "label": "свыше 1000", "minExclusive": 1000, "maxInclusive": null }
+    ],
+    "conditions": [
+      { "id": "field", "label": "Поле" },
+      { "id": "urban", "label": "Город" },
+      { "id": "constrained", "label": "Стеснённые" },
+      { "id": "reconstruction", "label": "Реконструкция" }
+    ],
+    "stages": [
+      { "id": "P", "label": "П" },
+      { "id": "R", "label": "Р" },
+      { "id": "PR", "label": "П+Р" }
+    ],
+    "depthBands": [
+      { "id": "to2", "label": "до 2 м" },
+      { "id": "from2to4", "label": "2–4 м" },
+      { "id": "over4", "label": "глубже 4 м" }
+    ],
+    "methods": [
+      { "id": "open", "label": "Открытая прокладка" },
+      { "id": "hdd", "label": "ГНБ" },
+      { "id": "jacking", "label": "Продавливание" }
+    ],
+    "packages": [
+      {
+        "id": "basic",
+        "label": "Базовый",
+        "scope": "Только Р, открытая прокладка, без экспертизы"
+      },
+      {
+        "id": "standard",
+        "label": "Стандарт",
+        "scope": "П+Р"
+      },
+      {
+        "id": "expertise",
+        "label": "Экспертиза",
+        "scope": "Стандарт плюс сопровождение экспертизы"
+      }
+    ]
+  },
+  "rateRowColumns": [
+    "networkType",
+    "diameterBandId",
+    "conditions",
+    "stage",
+    "rubPerMeter",
+    "source"
+  ],
+  "ratesPerMeter": [],
+  "shares": {
+    "routeShare": null,
+    "systemShare": null,
+    "corridorRepeatFactor": null
+  },
+  "depthCoefficients": {
+    "to2": null,
+    "from2to4": null,
+    "over4": null
+  },
+  "methodCoefficients": {
+    "open": null,
+    "hdd": null,
+    "jacking": null
+  },
+  "packageCoefficients": {
+    "basic": null,
+    "standard": null,
+    "expertise": null
+  },
+  "urgencyCoefficient": null,
+  "minimumContractRub": null,
+  "managerDiscountCap": null,
+  "pointItems": [
+    {
+      "id": "vns",
+      "label": "ВНС",
+      "pricedBy": "capacityBand",
+      "capacityBands": [],
+      "note": "Цена по производительности. Границы диапазонов берутся из договоров, в шаблоне их нет."
+    },
+    {
+      "id": "kns",
+      "label": "КНС",
+      "pricedBy": "capacityBand",
+      "capacityBands": [],
+      "note": "Цена по производительности. Границы диапазонов берутся из договоров, в шаблоне их нет."
+    },
+    {
+      "id": "lns",
+      "label": "ЛНС",
+      "pricedBy": "capacityBand",
+      "capacityBands": [],
+      "note": "Цена по производительности. Границы диапазонов берутся из договоров, в шаблоне их нет."
+    },
+    {
+      "id": "localTreatment",
+      "label": "Локальные очистные",
+      "pricedBy": "capacityBand",
+      "capacityBands": []
+    },
+    {
+      "id": "reservoir",
+      "label": "Резервуар",
+      "pricedBy": "capacityBand",
+      "capacityBands": []
+    },
+    {
+      "id": "duker",
+      "label": "Дюкер",
+      "pricedBy": "piece",
+      "rubPerPiece": null
+    }
+  ],
+  "crossings": [
+    { "id": "road", "label": "Дорога", "rubPerCrossing": null },
+    { "id": "rail", "label": "Железная дорога", "rubPerCrossing": null },
+    { "id": "water", "label": "Водная преграда", "rubPerCrossing": null }
+  ],
+  "options": [
+    {
+      "id": "bim",
+      "label": "BIM в Civil 3D",
+      "defaultOn": false,
+      "pricingMode": null,
+      "amount": null
+    },
+    {
+      "id": "expertiseSupport",
+      "label": "Сопровождение экспертизы",
+      "defaultOn": false,
+      "pricingMode": null,
+      "amount": null
+    },
+    {
+      "id": "approvals",
+      "label": "Сбор исходных данных и согласования с балансодержателями",
+      "defaultOn": false,
+      "pricingMode": null,
+      "amount": null
+    },
+    {
+      "id": "authorSupervision",
+      "label": "Авторский надзор",
+      "defaultOn": false,
+      "pricingMode": null,
+      "amount": null
+    },
+    {
+      "id": "surveys",
+      "label": "Изыскания",
+      "defaultOn": false,
+      "pricingMode": null,
+      "amount": null,
+      "note": "В КП отдельной строкой. В себестоимость проектирования не смешивается."
+    }
+  ]
+}

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Калькулятор ПИР</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Literata:opsz,wght@7..72,480;7..72,650&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <a class="skip" href="#object-title">К карточке объекта</a>
+  <header class="rail">
+    <p class="brand">Калькулятор ПИР</p>
+    <nav class="tabs" role="tablist" aria-label="Вид расчёта">
+      <button type="button" id="tab-desk" role="tab" aria-selected="true" aria-controls="desk" tabindex="0">Расчёт</button>
+      <button type="button" id="tab-book" role="tab" aria-selected="false" aria-controls="book" tabindex="-1">Базовая стоимость</button>
+      <button type="button" id="tab-sbc" role="tab" aria-selected="false" aria-controls="sbc" tabindex="-1">Стоимость в СБЦ</button>
+      <button type="button" id="tab-kp" role="tab" aria-selected="false" aria-controls="proposal" tabindex="-1">Коммерческое КП</button>
+    </nav>
+    <div class="signal" id="signal" role="status" aria-live="polite">
+      <span data-tone="go" data-on="false">Можно в КП</span>
+      <span data-tone="wait" data-on="true">Проверить</span>
+    </div>
+  </header>
+
+  <main class="wrap" id="desk" role="tabpanel" aria-labelledby="tab-desk">
+    <h1 id="object-title">ЖК «Северный берег»</h1>
+
+    <form id="card" action="#card" method="post">
+      <fieldset>
+        <legend>Карточка объекта</legend>
+        <div class="fields">
+          <label for="customer">Заказчик
+            <input id="customer" name="customer" autocomplete="organization" required value="ООО «Северная девелопмент»">
+          </label>
+          <label for="object">Объект
+            <input id="object" name="object" required value="ЖК «Северный берег»">
+          </label>
+          <label for="region">Регион
+            <select id="region" name="region" autocomplete="address-level1" required>
+              <option value="Москва">Москва</option>
+              <option value="Не Москва" selected>Не Москва</option>
+            </select>
+          </label>
+          <div class="choice span-row">Стадия по пункту 1.7
+            <div class="choices">
+              <label><input type="radio" name="stage" value="p"> П, 60%</label>
+              <label><input type="radio" name="stage" value="r"> Р, 40%</label>
+              <label><input type="radio" name="stage" value="pr" checked> П+Р, 100%</label>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="table-wrapper fit" tabindex="0" role="region" aria-labelledby="works-caption">
+        <table id="works">
+          <caption id="works-caption">Вид работ</caption>
+          <thead>
+            <tr>
+              <th class="num" scope="col">№</th>
+              <th scope="col">Наименование работы</th>
+              <th class="num" scope="col">Количество</th>
+              <th class="num" scope="col">Цена</th>
+              <th class="num" scope="col">Общая сумма</th>
+              <th scope="col"><span class="vh">Действие</span></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+          <tfoot>
+            <tr>
+              <th colspan="4" scope="row">Итого</th>
+              <td class="num" id="sum-price" data-label="Общая сумма">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="hint" id="works-empty">Добавьте строку и выберите работу из списка.</p>
+      <div class="toolbar">
+        <button type="button" id="add-work" class="quiet">Добавить работу</button>
+      </div>
+      <fieldset>
+        <legend>Опции</legend>
+        <div class="choices extra-list" id="extra-list"></div>
+        <p class="extra-total" id="extra-total" aria-live="polite">
+          <span>Итого с опциями</span>
+          <span id="extra-sum">—</span>
+        </p>
+      </fieldset>
+      <p class="hint">Ориентир СБЦ: <span id="sum-sbc">нет расчёта</span>. В итог таблицы не входит.</p>
+    </form>
+
+    <div class="toolbar">
+      <button type="button" id="save-card" class="quiet">Скачать карточку JSON</button>
+      <button type="button" id="open-kp">Показать КП</button>
+    </div>
+
+  </main>
+
+  <section class="wrap" id="book" role="tabpanel" aria-labelledby="tab-book" hidden tabindex="-1">
+    <h1>Базовая стоимость</h1>
+    <p class="lede">Общая база для всех объектов в этом браузере. Примечания пустые: их пишете вы. Базовая цена каждой позиции — 50 000 ₽, позже разведём ставки по видам работ.</p>
+    <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="book-caption">
+      <table id="book-table">
+        <caption id="book-caption">База</caption>
+        <thead>
+          <tr>
+            <th>Позиция</th>
+            <th>Примечания</th>
+            <th>Ед.</th>
+            <th class="num">Цена за единицу</th>
+            <th><span class="vh">Действие</span></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="hint" id="book-empty" hidden>В базе пока нет позиций. Добавьте первую ниже.</p>
+    <div class="toolbar">
+      <button type="button" id="download-book" class="quiet">Скачать базу JSON</button>
+    </div>
+    <form id="book-position" action="#book" method="post">
+      <fieldset>
+        <legend>Новая позиция</legend>
+        <div class="fields">
+          <label>Название
+            <input name="name" required autocomplete="off">
+          </label>
+          <label>Единица
+            <input name="unit" required value="шт." autocomplete="off">
+          </label>
+          <label>Цена за единицу, ₽
+            <input name="price" type="number" min="0" step="1" required value="50000">
+          </label>
+        </div>
+        <div class="toolbar">
+          <button type="submit">Добавить позицию</button>
+        </div>
+        <p class="warn" id="book-position-warn" hidden aria-live="polite"></p>
+      </fieldset>
+    </form>
+  </section>
+
+  <section class="wrap" id="sbc" role="tabpanel" aria-labelledby="tab-sbc" hidden tabindex="-1">
+    <h1>Стоимость в СБЦ</h1>
+    <p class="lede">Отдельный расчёт проектных работ по СБЦП 81-2001-17 «Объекты водоснабжения и канализации». Табличные a и b даны в тысячах рублей на 01.01.2001. На IV квартал 2026 индекс проектных работ к этой базе — 7,22: письмо Минстроя от 26.10.2026 № 66866-ИФ/09 новый индекс ПИР не публикует, поэтому по письму от 25.12.2017 № 58300-ОГ/09 оставлен индекс III квартала (письмо от 23.07.2026 № 45358-ИФ/09). В коммерческую цену и в КП эта сумма не входит.</p>
+    <form id="sbc-form" action="#sbc" method="post">
+      <fieldset>
+        <legend>Множители справочника</legend>
+        <div class="fields">
+          <div class="choice">Стадия по пункту 1.7
+            <div class="choices">
+              <label><input type="radio" name="sbc-stage" value="p"> П, 60%</label>
+              <label><input type="radio" name="sbc-stage" value="r"> Р, 40%</label>
+              <label><input type="radio" name="sbc-stage" value="pr" checked> П+Р, 100%</label>
+            </div>
+          </div>
+          <label>Ценообразующий коэффициент
+            <input name="sbc-k" type="number" min="0" step="0.01" value="1" aria-describedby="k-caption">
+          </label>
+        </div>
+        <div class="table-wrapper k-guide" tabindex="0" role="region" aria-labelledby="k-caption">
+          <table id="k-table">
+            <caption id="k-caption">Предлагаемые коэффициенты. В поле — произведение подходящих чисел, иначе 1.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Строка</th>
+                <th class="num" scope="col">Застройка до 0,5</th>
+                <th class="num" scope="col">Застройка больше 0,5</th>
+                <th class="num" scope="col">Пересечений 5–10</th>
+                <th class="num" scope="col">Пересечений больше 10</th>
+                <th class="num" scope="col">Неметаллическая труба</th>
+                <th class="num" scope="col">Москва и Санкт-Петербург</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Табл. 16 и 17, сети</th>
+                <td class="num" data-label="Застройка до 0,5">1,30</td>
+                <td class="num" data-label="Застройка больше 0,5">1,50</td>
+                <td class="num" data-label="Пересечений 5–10">1,07</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Неметаллическая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 3, водовод, п. 1–12</th>
+                <td class="num" data-label="Застройка до 0,5">1,20</td>
+                <td class="num" data-label="Застройка больше 0,5">1,40</td>
+                <td class="num" data-label="Пересечений 5–10">1,07</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Неметаллическая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 3, надземный водовод</th>
+                <td class="num" data-label="Застройка до 0,5">—</td>
+                <td class="num" data-label="Застройка больше 0,5">—</td>
+                <td class="num" data-label="Пересечений 5–10">1,07</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Неметаллическая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 3, камеры</th>
+                <td class="num" data-label="Застройка до 0,5">—</td>
+                <td class="num" data-label="Застройка больше 0,5">—</td>
+                <td class="num" data-label="Пересечений 5–10">—</td>
+                <td class="num" data-label="Пересечений больше 10">—</td>
+                <td class="num" data-label="Неметаллическая труба">—</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 8, коллектор, п. 1–12</th>
+                <td class="num" data-label="Застройка до 0,5">1,30</td>
+                <td class="num" data-label="Застройка больше 0,5">1,50</td>
+                <td class="num" data-label="Пересечений 5–10">1,07</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Неметаллическая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 8, ГНБ, прессошнек, щит</th>
+                <td class="num" data-label="Застройка до 0,5">—</td>
+                <td class="num" data-label="Застройка больше 0,5">—</td>
+                <td class="num" data-label="Пересечений 5–10">1,07</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Неметаллическая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 18, дренаж</th>
+                <td class="num" data-label="Застройка до 0,5">—</td>
+                <td class="num" data-label="Застройка больше 0,5">—</td>
+                <td class="num" data-label="Пересечений 5–10">—</td>
+                <td class="num" data-label="Пересечений больше 10">—</td>
+                <td class="num" data-label="Неметаллическая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </fieldset>
+      <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-caption">
+        <table id="sbc-table">
+          <caption id="sbc-caption">Строки справочника</caption>
+          <thead>
+            <tr>
+              <th><button type="button" class="col-help" interestfor="tip-sbc-row">Строка</button></th>
+              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-x">Показатель</button></th>
+              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-a">a</button></th>
+              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-b">b</button></th>
+              <th class="num">IV кв. 2026</th>
+              <th><span class="vh">Действие</span></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint" id="sbc-empty">Добавьте строку. В списке таблицы 3, 8, 18 и часть таблиц 16 и 17. Остальные пункты вводятся как своя строка: цена в тыс. руб. равна a + b × показатель, а если b пустое — a × показатель.</p>
+      <div popover="hint" id="tip-sbc-row" class="col-tip">Пункт СБЦП 81-2001-17. Он задаёт a, b и единицу показателя. Кольцевой водопровод — таблица 16, самотечная канализация — 17, водовод — 3, коллектор и закрытый переход — 8, дренаж — 18. Расход в названии строки выбирает пункт. В колонку «Показатель» он не пишется.</div>
+      <div popover="hint" id="tip-sbc-x" class="col-tip">Величина X из проекта, в единицах выбранной строки. Единица показана рядом с полем. Для таблиц 3, 16 и 17 это длина сети в километрах. Для ГНБ, прессошнека и кольцевого дренажа — длина в метрах. Для пластового дренажа — площадь в квадратных метрах. Для камеры — число штук. Цена строки в тысячах рублей 2001 года равна a + b × показатель: длиннее сеть — выше цена. Если число выходит за интервал строки, под таблицей появится предупреждение.</div>
+      <div popover="hint" id="tip-sbc-a" class="col-tip">Постоянная часть базовой цены из справочника, тысячи рублей на 01.01.2001. Входит в цену строки один раз, пока вы остаётесь в этом пункте.</div>
+      <div popover="hint" id="tip-sbc-b" class="col-tip">Добавка за каждую единицу показателя, тоже тысячи рублей 2001 года. Один километр сети таблиц 16 и 17 добавляет ровно b. Прочерк значит, что добавки нет: цена строки равна a × показатель. Для камеры это цена одной штуки, умноженная на их число.</div>
+      <div class="toolbar">
+        <button type="button" id="add-sbc">Добавить строку</button>
+      </div>
+      <p class="warn" id="sbc-warn" hidden aria-live="polite"></p>
+    </form>
+    <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-total-caption">
+      <table class="totals">
+        <caption id="sbc-total-caption">Итог в ценах IV квартала 2026</caption>
+        <tbody>
+          <tr><th>База 2001, тыс. руб.</th><td id="sbc-base">—</td></tr>
+          <tr><th>После стадии и коэффициента, тыс. руб.</th><td id="sbc-factored">—</td></tr>
+          <tr><th>Текущая стоимость, × 7,22</th><td id="sbc-now">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <article id="proposal" role="tabpanel" aria-labelledby="tab-kp" hidden tabindex="-1">
+    <div class="letter-head">
+      <div>
+        <strong>Проектные работы</strong>
+        <div>Наружные сети В1, К1, К2 и дренаж</div>
+      </div>
+      <div id="kp-date"></div>
+    </div>
+    <h1>Коммерческое предложение</h1>
+    <p id="kp-intro"></p>
+    <table>
+      <caption class="vh">Состав и стоимость для заказчика</caption>
+      <thead>
+        <tr><th>Состав работ</th><th class="num">Количество</th><th class="num">Сумма</th></tr>
+      </thead>
+      <tbody id="kp-lines"></tbody>
+    </table>
+    <p id="kp-foot"></p>
+    <div class="sheet-actions">
+      <button type="button" id="back-desk" class="quiet">Вернуться к расчёту</button>
+      <button type="button" id="print-kp">Печать</button>
+    </div>
+  </article>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
