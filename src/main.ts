@@ -3,26 +3,32 @@ import { SBC_ROWS } from "./data/sbc-rows.ts";
 import { SBC2_ROWS } from "./data/sbc2-rows.ts";
 import { COUNTS, SHEETS } from "./data/sheets.ts";
 import { normalizeCatalog, seedCatalog } from "./data/seed.ts";
-import { quoteCard, workRate } from "./engine/quote.ts";
+import { emptyBuckets, phaseHasCalc } from "./engine/phases.ts";
+import type { PhaseDraft, WorkDraft } from "./engine/phases.ts";
+import { quoteCard, scaleMoney, workRate } from "./engine/quote.ts";
 import { quoteSbc } from "./engine/sbc.ts";
 import type {
   CardInput,
   ObjectKind,
   Position,
   Quote,
+  WorkLine,
   SbcFactor,
   SbcLineInput,
+  SbcQuote,
   SbcSourceRow,
   Stage,
 } from "./engine/types.ts";
 import { SBC_INDEX } from "./data/sbc-book.ts";
-import { money, sbcNum } from "./format.ts";
+import { money, pct, sbcNum } from "./format.ts";
 
 type View = "desk" | "book" | "sbc" | "kp";
 
 const BOOK_KEY = "pir-structure-book-v2";
 const SBC_KEY = "pir-sbc-sheet-v2";
 const SBC_KEY_V1 = "pir-sbc-sheet-v1";
+const PHASES_KEY = "pir-phases-v1";
+const PHASE_MAX = 12;
 
 const FACTOR_LABEL: Record<SbcFactor, string> = {
   pressure: "Напорная канализация, ×0,7",
@@ -32,7 +38,7 @@ const FACTOR_LABEL: Record<SbcFactor, string> = {
   typical: "Типовой альбом, ×0,2",
 };
 
-const LINEAR_LEDE = "Отдельный расчёт проектных работ по СБЦП 81-2001-17 «Объекты водоснабжения и канализации». Табличные a и b даны в тысячах рублей на 01.01.2001. На IV квартал 2026 индекс проектных работ к этой базе — 7,22: письмо Минстроя от 26.10.2026 № 66866-ИФ/09 новый индекс ПИР не публикует, поэтому по письму от 25.12.2017 № 58300-ОГ/09 оставлен индекс III квартала (письмо от 23.07.2026 № 45358-ИФ/09). В коммерческую цену и в КП эта сумма не входит.";
+const LINEAR_TITLE = "СБЦП 81-2001-17 «Объекты водоснабжения и канализации».";
 const SITE_TITLE = "СБЦП 81-2001-07 «Коммунальные инженерные сети и сооружения».";
 const LINEAR_EMPTY = "Добавьте строку. В списке таблицы 3, 8, 18 и часть таблиц 16 и 17. Остальные пункты вводятся как своя строка: цена в тыс. руб. равна a + b × показатель, а если b пустое — a × показатель.";
 const SITE_EMPTY = "Добавьте строку. В списке таблицы 4–7. Для труб длина короче 100 м считается как 100 м. Колодцы открытой канализации уже входят в пункты 1–9 таблицы 5.";
@@ -52,21 +58,44 @@ const tabs: { view: View; button: HTMLButtonElement }[] = [
 ];
 
 type Bucket = { k: number; lines: SbcLineInput[] };
+type Snapshot = { phase: PhaseDraft; quote: Quote; sbc: SbcQuote | null };
 
 let catalog = loadBook();
 let sbcIndex = SBC_INDEX;
 let kind: ObjectKind | null = null;
 let buckets: Record<ObjectKind, Bucket> = { linear: emptyBucket(), site: emptyBucket() };
 let sbcLines: SbcLineInput[] = [];
+let phases: PhaseDraft[] = [];
+let activePhase = 0;
+let adjustPercent = 0;
+let letterEdits: Record<string, string> = {};
+let mute = false;
+let currentView: View = "desk";
+let proposalStructure = "";
+let proposalMoney = "";
+let forceProposal = false;
 
 form.addEventListener("input", (event) => {
+  if (mute) return;
   const target = event.target;
+  if (target instanceof HTMLInputElement && target.name === "phase-count") {
+    resizePhases(Number(target.value));
+    return;
+  }
+  if (target instanceof HTMLInputElement && target.name === "phase-name") {
+    const index = Number(target.dataset.phaseName);
+    if (phases[index]) phases[index].name = target.value;
+    renderPhaseSwitch();
+    paint();
+    return;
+  }
   if (target instanceof HTMLInputElement && target.name === "object-kind" && (target.value === "linear" || target.value === "site")) {
     applyKind(target.value);
   }
   if (target instanceof HTMLInputElement && target.name === "stage") {
     applyStage(target.value);
     persistSbc();
+    renderSbcTotals();
   }
   paint();
 });
@@ -121,28 +150,39 @@ must<HTMLElement>(".tabs").addEventListener("keydown", (event) => {
 must("#back-desk").addEventListener("click", () => show("desk"));
 openKpButton.addEventListener("click", openKp);
 must("#print-kp").addEventListener("click", () => window.print());
+must("#kp-reset").addEventListener("click", resetLetter);
+must<HTMLInputElement>("#kp-adjust").addEventListener("input", () => {
+  adjustPercent = readAdjust();
+  paint();
+});
 must("#save-card").addEventListener("click", () => {
-  const quote = currentQuote();
+  const snapshots = projectSnapshots();
   download("raschet.json", {
     object: field("object"),
     customer: field("customer"),
     region: field("region"),
-    objectKind: kind,
-    stage: field("stage"),
-    works: quote.lines.filter((item) => item.sum > 0).map((item) => ({
-      name: item.name,
-      qty: item.qty,
-      price: item.price,
-      sum: item.sum,
+    adjustPercent,
+    phases: snapshots.map((item) => ({
+      name: item.phase.name,
+      objectKind: item.phase.kind,
+      stage: item.phase.stage,
+      works: item.quote.lines.filter((line) => line.sum > 0).map((line) => ({
+        name: line.name,
+        qty: line.qty,
+        price: line.price,
+        sum: line.sum,
+      })),
+      extras: item.quote.extras.map((extra) => ({
+        name: extra.name,
+        rate: extra.rate,
+        sum: extra.sum,
+      })),
+      total: item.quote.total,
+      offer: offerOf(item.quote),
+      sbcCurrent: item.sbc?.now ?? 0,
+      sbcBaseThousand: item.sbc?.base ?? 0,
+      sbcFactoredThousand: item.sbc?.factored ?? 0,
     })),
-    price: quote.price,
-    extras: quote.extras.map((item) => ({
-      name: item.name,
-      rate: item.rate,
-      sum: item.sum,
-    })),
-    total: quote.total,
-    sbcCurrent: quote.sbcNow,
   });
 });
 
@@ -202,14 +242,16 @@ sbcForm.addEventListener("input", (event) => {
 });
 sbcForm.addEventListener("submit", (event) => event.preventDefault());
 
-loadStore();
+loadProject();
 bindColumnTips();
 renderBook();
-syncKindChrome();
-renderSbc();
 renderExtras();
-addWork(false);
-persistSbc();
+hydratePhase();
+bindPhaseTabs();
+bindLetter();
+must<HTMLInputElement>("#kp-adjust").value = String(adjustPercent);
+applyStaticEdits();
+paint();
 
 function bindColumnTips() {
   const nativeInterest = Object.prototype.hasOwnProperty.call(HTMLButtonElement.prototype, "interestForElement");
@@ -256,7 +298,9 @@ function bindColumnTips() {
 }
 
 function paint() {
-  const quote = currentQuote();
+  if (mute) return;
+  const snapshots = projectSnapshots();
+  const quote = snapshots[activePhase]?.quote ?? currentQuote();
   const rows = [...document.querySelectorAll<HTMLTableRowElement>("#works tbody tr")];
   rows.forEach((row, index) => {
     const number = index + 1;
@@ -282,13 +326,20 @@ function paint() {
     el.dataset.on = el.dataset.tone === quote.tone ? "true" : "false";
   });
   must("#signal").setAttribute("aria-label", `${quote.short}. ${quote.note}`);
-  const blocked = quote.empty;
-  kpButton.disabled = blocked;
-  kpButton.title = blocked ? quote.note : "";
-  openKpButton.disabled = blocked;
-  openKpButton.title = blocked ? quote.note : "";
+  const projectReady = snapshots.some((item) => !item.quote.empty || (item.sbc?.now ?? 0) > 0);
+  const blockedNote = projectReady
+    ? quote.empty
+      ? "В этом этапе пусто. В КП попадут остальные этапы."
+      : ""
+    : quote.note;
+  kpButton.disabled = !projectReady;
+  kpButton.title = blockedNote;
+  openKpButton.disabled = !projectReady;
+  openKpButton.title = blockedNote;
   text("#object-title", field("object") || "Без названия");
-  paintProposal(quote);
+  paintProposal(snapshots);
+  paintFork(snapshots);
+  persistProject();
 }
 
 function currentQuote(): Quote {
@@ -301,44 +352,41 @@ function currentQuote(): Quote {
   return quoteCard(input, catalog);
 }
 
-function paintProposal(quote: Quote) {
-  const until = new Date();
-  until.setDate(until.getDate() + 30);
-  text("#kp-date", `Цена действует до ${until.toLocaleDateString("ru-RU")}`);
-  text("#kp-intro", `${field("customer")}. ${field("object")}, ${field("region")}.`);
-  const lines: [string, string, number][] = [];
-  quote.lines.filter((item) => item.qty > 0 && item.sum > 0).forEach((item) => {
-    lines.push([item.missing ? "Позиция не найдена в базе" : item.name, `${item.qty} ${item.unit}`, item.sum]);
-  });
-  quote.extras.filter((item) => item.sum > 0).forEach((item) => {
-    lines.push([`${item.name}, +${Math.round(item.rate * 100)}%`, "", item.sum]);
-  });
+function paintProposal(items: Snapshot[]) {
+  const used = items.some((item) => !item.quote.empty) ? items.filter((item) => !item.quote.empty) : items;
+  const stages = new Set(used.map((item) => item.phase.stage));
+  const stage = stages.size === 1 ? [...stages][0] : "pr";
+  fillEditable("#kp-work", workTitle(stage));
+  const customer = field("customer").trim();
+  const objectName = field("object").trim();
+  fillEditable("#kp-intro", [customer, objectName].filter(Boolean).join(" · "));
+  const rows = kpRows(items);
+  const structure = rows.map((row) => row.marker).join("\n");
+  const monies = rows.map((row) => (row.moneyAt >= 0 ? row.cells[row.moneyAt] : "")).join("\n");
   const body = must("#kp-lines");
-  body.replaceChildren();
-  if (lines.length === 0) {
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = 3;
-    td.textContent = "В предложении пока нет строк. Вернитесь к себестоимости и добавьте работу.";
-    tr.append(td);
-    body.append(tr);
+  if (structure !== proposalStructure || forceProposal) {
+    body.replaceChildren();
+    rows.forEach((row) => body.append(kpRow(row)));
+    proposalStructure = structure;
+    proposalMoney = monies;
+    return;
   }
-  lines.forEach(([name, qty, sum]) => body.append(lineRow(name, qty, money.format(sum))));
-  const total = document.createElement("tr");
-  total.className = "sum-row";
-  const name = document.createElement("td");
-  const qty = document.createElement("td");
-  const sum = document.createElement("td");
-  name.textContent = "Итого";
-  sum.textContent = money.format(quote.total);
-  sum.className = "num";
-  total.append(name, qty, sum);
-  body.append(total);
-  text("#kp-foot", "В стоимость входят перечисленные работы. Срок действия цены указан выше.");
+  if (monies === proposalMoney) return;
+  const lines = [...body.querySelectorAll("tr")];
+  rows.forEach((row, index) => {
+    if (row.moneyAt < 0) return;
+    const cell = lines[index]?.children[row.moneyAt];
+    if (!(cell instanceof HTMLElement)) return;
+    const key = cell.dataset.editKey || "";
+    if (Object.prototype.hasOwnProperty.call(letterEdits, key)) return;
+    cell.textContent = row.cells[row.moneyAt] ?? "";
+  });
+  proposalMoney = monies;
 }
 
 function show(view: View) {
   if (view === "sbc" && !kind) return;
+  currentView = view;
   const panels: Record<View, HTMLElement> = {
     desk: must("#desk"),
     book: must("#book"),
@@ -365,6 +413,12 @@ function openKp() {
 }
 
 function addWork(focus: boolean) {
+  const select = appendWork();
+  if (focus) select.focus();
+  paint();
+}
+
+function appendWork(item?: WorkDraft) {
   const body = must("#works tbody");
   const row = document.createElement("tr");
   const no = document.createElement("th");
@@ -374,7 +428,7 @@ function addWork(focus: boolean) {
   nameCell.dataset.label = "Наименование работы";
   const select = document.createElement("select");
   select.name = "work";
-  fillWorkSelect(select, "");
+  fillWorkSelect(select, item?.ref || "");
   nameCell.append(select);
   const qtyCell = document.createElement("td");
   qtyCell.className = "num";
@@ -387,7 +441,7 @@ function addWork(focus: boolean) {
   qty.min = "0";
   qty.step = "1";
   qty.inputMode = "numeric";
-  qty.value = "1";
+  qty.value = String(item?.qty ?? 1);
   qty.autocomplete = "off";
   measure.append(qty);
   qtyCell.append(measure);
@@ -402,7 +456,7 @@ function addWork(focus: boolean) {
   price.min = "0";
   price.step = "1";
   price.inputMode = "numeric";
-  price.value = "0";
+  price.value = String(item?.price ?? 0);
   price.autocomplete = "off";
   priceMeasure.append(price);
   priceCell.append(priceMeasure);
@@ -419,8 +473,7 @@ function addWork(focus: boolean) {
   action.append(remove);
   row.append(no, nameCell, qtyCell, priceCell, sum, action);
   body.append(row);
-  if (focus) select.focus();
-  paint();
+  return select;
 }
 
 function workGroups() {
@@ -496,7 +549,7 @@ function readWorks() {
 function readSbcSheet() {
   const selected = document.querySelector<HTMLInputElement>('input[name="sbc-stage"]:checked');
   return {
-    stage: asStage(selected?.value || "pr"),
+    stage: asStage(selected?.value || "r"),
     k: readK(),
     index: readIndex(),
     lines: sbcLines,
@@ -680,7 +733,7 @@ function renderSbc() {
 
 function renderSbcTotals() {
   text("#sbc-index-readout", indexText());
-  if (kind === "site") writeLede(siteLede());
+  writeLede(kind === "site" ? siteLede() : linearLede());
   const sheet = quoteSbc(readSbcSheet());
   const priced = sheet.lines.some((line) => !line.blocked);
   text("#sbc-base", sbcLines.length && priced ? sbcNum.format(sheet.base) : "—");
@@ -741,18 +794,56 @@ function loadStore() {
 }
 
 function persistSbc() {
+  persistProject();
+}
+
+function persistProject() {
+  if (mute || !phases.length) return;
+  commitActive();
   sbcIndex = readIndex();
-  if (kind) {
-    buckets[kind].k = readK();
-    buckets[kind].lines = sbcLines;
-  }
+  const phase = phases[activePhase];
   localStorage.setItem(SBC_KEY, JSON.stringify({
-    objectKind: kind,
-    stage: field("stage") || "pr",
+    objectKind: phase?.kind ?? null,
+    stage: phase?.stage ?? "r",
     index: sbcIndex,
-    linear: buckets.linear,
-    site: buckets.site,
+    linear: phase?.buckets.linear ?? emptyBucket(),
+    site: phase?.buckets.site ?? emptyBucket(),
   }));
+  localStorage.setItem(PHASES_KEY, JSON.stringify({
+    customer: field("customer"),
+    object: field("object"),
+    region: field("region"),
+    adjustPercent,
+    active: activePhase,
+    index: sbcIndex,
+    phases,
+    letter: letterEdits,
+  }));
+}
+
+function loadProject() {
+  buckets = { linear: emptyBucket(), site: emptyBucket() };
+  kind = null;
+  const saved = readJson(PHASES_KEY);
+  if (isProject(saved) && saved.phases.length > 0) {
+    phases = saved.phases.map((item, index) => sanitizePhase(item, index));
+    activePhase = Math.min(Math.max(0, Number(saved.active) || 0), phases.length - 1);
+    adjustPercent = finiteNumber(saved.adjustPercent);
+    if (isIndex(saved.index)) sbcIndex = saved.index;
+    letterEdits = sanitizeLetter(saved.letter);
+    setNamedField("customer", saved.customer);
+    setNamedField("object", saved.object);
+    setNamedField("region", saved.region);
+    must<HTMLInputElement>("#phase-count").value = String(phases.length);
+    return;
+  }
+  loadStore();
+  phases = [blankPhase(0)];
+  if (kind === "linear" || kind === "site") phases[0].kind = kind;
+  else kind = "site";
+  phases[0].stage = asStage(field("stage") || "r");
+  phases[0].buckets = cloneBuckets(buckets);
+  activePhase = 0;
 }
 
 function isPosition(value: unknown): value is Position {
@@ -790,18 +881,252 @@ function cell(value: string) {
   return el;
 }
 
-function lineRow(name: string, qty: string, sum: string) {
+type KpRow = { marker: string; cells: string[]; moneyAt: number; className?: string; span?: boolean };
+type PricedWork = WorkLine & { scaled: number };
+type PricedExtra = { id: string; name: string; rate: number; scaled: number };
+
+const LETTER_EXTRA: Record<string, string> = {
+  bim: "BIM",
+  tax: "Налог СЗ",
+  vor: "ВОР",
+  expert: "Экспертиза",
+  approval: "Согласования",
+  rush: "Срочность",
+};
+
+const PACK_AT = 6;
+
+function kpRows(items: Snapshot[]): KpRow[] {
+  const visible = items.filter((item) => !item.quote.empty);
+  if (!visible.length) {
+    return [{
+      marker: "empty",
+      cells: ["В предложении пока нет строк. Добавьте работу на вкладке себестоимости."],
+      moneyAt: -1,
+      span: true,
+    }];
+  }
+  const rows: KpRow[] = [];
+  const multi = visible.length > 1;
+  const mixedStages = new Set(visible.map((item) => item.phase.stage)).size > 1;
+  const shared = new Set(visible.map((item) => extraSignature(item.quote))).size <= 1;
+  let grand = 0;
+  visible.forEach((item) => {
+    pushPhaseHead(rows, item, multi, mixedStages);
+    const works = pricedWorks(item.quote);
+    const worksSum = appendWorks(rows, item.phase.id, works);
+    if (shared) {
+      grand += worksSum;
+      if (multi && extraSignature(item.quote) === "") {
+        rows.push(moneyRow(`sub:${item.phase.id}`, "Итого этапа", worksSum, "subtotal"));
+      }
+      return;
+    }
+    const extras = pricedExtras(item.quote);
+    let phaseTotal = worksSum;
+    if (extras.length) {
+      rows.push(worksSumRow(`works:${item.phase.id}`, worksSum));
+      extras.forEach((extra) => {
+        phaseTotal += extra.scaled;
+        rows.push(extraRow(`extra:${item.phase.id}:${extra.id}:${extra.rate}`, extra));
+      });
+    }
+    grand += phaseTotal;
+    if (multi) rows.push(moneyRow(`sub:${item.phase.id}`, "Итого этапа", phaseTotal, "subtotal"));
+  });
+  if (shared) {
+    const extras = mergeExtras(visible);
+    if (extras.length) {
+      rows.push(worksSumRow("works:all", grand));
+      extras.forEach((extra) => {
+        grand += extra.scaled;
+        rows.push(extraRow(`extra:all:${extra.id}:${extra.rate}`, extra));
+      });
+    }
+  }
+  rows.push(moneyRow("grand", "Итого", grand, "sum-row"));
+  return rows;
+}
+
+function pushPhaseHead(rows: KpRow[], item: Snapshot, multi: boolean, mixedStages: boolean) {
+  const name = item.phase.name.trim() || "Этап";
+  const index = phases.indexOf(item.phase);
+  const renamed = name !== `Этап ${index + 1}`;
+  if (!multi && !renamed) return;
+  const title = mixedStages ? `${name} · ${stageLabel(item.phase.stage)}` : name;
+  rows.push({
+    marker: `phase:${item.phase.id}:${title}`,
+    cells: [title],
+    moneyAt: -1,
+    span: true,
+    className: "phase-row",
+  });
+}
+
+function pricedWorks(quote: Quote): PricedWork[] {
+  return quote.lines
+    .filter((line) => line.qty > 0 && line.sum > 0)
+    .map((line) => ({ ...line, scaled: scaleMoney(line.sum, adjustPercent) }));
+}
+
+function pricedExtras(quote: Quote): PricedExtra[] {
+  return quote.extras
+    .filter((extra) => extra.sum > 0)
+    .map((extra) => ({ id: extra.id, name: extra.name, rate: extra.rate, scaled: scaleMoney(extra.sum, adjustPercent) }));
+}
+
+function extraSignature(quote: Quote) {
+  return quote.extras.filter((extra) => extra.sum > 0).map((extra) => `${extra.id}:${extra.rate}`).join("|");
+}
+
+function mergeExtras(items: Snapshot[]): PricedExtra[] {
+  const order: string[] = [];
+  const sums = new Map<string, PricedExtra>();
+  items.forEach((item) => {
+    pricedExtras(item.quote).forEach((extra) => {
+      const current = sums.get(extra.id);
+      if (!current) {
+        order.push(extra.id);
+        sums.set(extra.id, { ...extra });
+        return;
+      }
+      current.scaled += extra.scaled;
+    });
+  });
+  return order.flatMap((id) => {
+    const extra = sums.get(id);
+    return extra ? [extra] : [];
+  });
+}
+
+function appendWorks(rows: KpRow[], phaseId: string, lines: PricedWork[]) {
+  const sum = lines.reduce((acc, line) => acc + line.scaled, 0);
+  if (lines.length <= PACK_AT) {
+    lines.forEach((line, index) => rows.push(workRow(phaseId, line, index)));
+    return sum;
+  }
+  const grouped = groupWorks(lines);
+  if (grouped && grouped.length < lines.length) {
+    grouped.forEach((group) => {
+      rows.push({
+        marker: `group:${phaseId}:${group.key}:${group.marker}`,
+        cells: [group.label, group.qty, money.format(group.sum)],
+        moneyAt: 2,
+      });
+    });
+    return sum;
+  }
+  rows.push({
+    marker: `pack:${phaseId}:${lines.map((line) => `${line.name}:${line.qty}`).join("|")}`,
+    cells: [lines.map((line) => `${line.missing ? "Нет в базе" : line.name} — ${line.qty} ${line.unit}`).join("\n"), `${lines.length} поз.`, money.format(sum)],
+    moneyAt: 2,
+    className: "pack",
+  });
+  return sum;
+}
+
+function groupWorks(lines: PricedWork[]) {
+  const buckets = new Map<string, PricedWork[]>();
+  lines.forEach((line) => {
+    const key = networkOf(line.name) || "Прочее";
+    buckets.set(key, [...(buckets.get(key) ?? []), line]);
+  });
+  const named = [...buckets.keys()].filter((key) => key !== "Прочее");
+  const rest = buckets.get("Прочее")?.length ?? 0;
+  if (named.length === 0 || (named.length < 2 && rest > 4)) return null;
+  const order = [...buckets.keys()];
+  return order.map((key) => {
+    const group = buckets.get(key) ?? [];
+    const bits = group.map((line) => workBit(line, key));
+    return {
+      key,
+      marker: group.map((line) => `${line.name}:${line.qty}`).join(","),
+      label: key === "Прочее" ? bits.join(", ") : `${key}: ${bits.join(", ")}`,
+      qty: group.length === 1 ? `${group[0].qty} ${group[0].unit}` : `${group.length} поз.`,
+      sum: group.reduce((acc, line) => acc + line.scaled, 0),
+    };
+  });
+}
+
+function networkOf(name: string) {
+  if (name.includes("НК1")) return "НК1";
+  if (name.includes("НК2")) return "НК2";
+  if (name.includes("НВ")) return "НВ";
+  if (name.includes("НК")) return "НК";
+  if (/дренаж/i.test(name) || /(?:^|\s)Д$/.test(name)) return "Дренаж";
+  return "";
+}
+
+function workBit(line: PricedWork, key: string) {
+  const name = line.missing ? "нет в базе" : key === "Прочее" ? line.name : shortWork(line.name, key);
+  if (line.qty === 1 && line.unit === "шт.") return name;
+  return `${name} ${line.qty} ${line.unit}`;
+}
+
+function shortWork(name: string, key: string) {
+  const pattern = key === "Дренаж" ? /дренаж|(?:^|\s)Д$/i : key;
+  const trimmed = name.replace(pattern, " ").replace(/\s+/g, " ").trim();
+  return (trimmed || name).toLocaleLowerCase("ru-RU");
+}
+
+function workRow(phaseId: string, line: PricedWork, index: number): KpRow {
+  return {
+    marker: `line:${phaseId}:${index}:${line.name}:${line.qty}:${line.unit}`,
+    cells: [line.missing ? "Нет в базе" : line.name, `${line.qty} ${line.unit}`, money.format(line.scaled)],
+    moneyAt: 2,
+  };
+}
+
+function worksSumRow(marker: string, sum: number): KpRow {
+  return moneyRow(marker, "Стоимость работ", sum, "works-sum");
+}
+
+function extraRow(marker: string, extra: PricedExtra): KpRow {
+  const name = LETTER_EXTRA[extra.id] ?? extra.name;
+  return {
+    marker,
+    cells: [`${name} ${pct.format(extra.rate)}`, "", money.format(extra.scaled)],
+    moneyAt: 2,
+  };
+}
+
+function moneyRow(marker: string, label: string, sum: number, className: string): KpRow {
+  return {
+    marker,
+    cells: [label, "", money.format(sum)],
+    moneyAt: 2,
+    className,
+  };
+}
+
+function kpRow(row: KpRow) {
   const tr = document.createElement("tr");
-  const a = document.createElement("td");
-  const b = document.createElement("td");
-  const c = document.createElement("td");
-  a.textContent = name;
-  b.textContent = qty;
-  b.className = "num";
-  c.textContent = sum;
-  c.className = "num";
-  tr.append(a, b, c);
+  if (row.className) tr.className = row.className;
+  if (row.span) {
+    const td = editableCell(row.cells[0] ?? "", false, `${row.marker}#0`);
+    td.colSpan = 3;
+    tr.append(td);
+    return tr;
+  }
+  row.cells.forEach((value, index) => tr.append(editableCell(value, index > 0, `${row.marker}#${index}`)));
   return tr;
+}
+
+function editableCell(value: string, numeric: boolean, key: string) {
+  const td = document.createElement("td");
+  const stored = Object.prototype.hasOwnProperty.call(letterEdits, key) ? letterEdits[key] : undefined;
+  td.textContent = stored ?? value;
+  td.setAttribute("contenteditable", "plaintext-only");
+  td.spellcheck = !numeric;
+  td.dataset.editKey = key;
+  if (numeric) td.className = "num";
+  return td;
+}
+
+function workTitle(stage: Stage) {
+  if (stage === "p") return "Разработка проектной документации";
+  if (stage === "r") return "Разработка рабочей документации";
+  return "Разработка проектной и рабочей документации";
 }
 
 function numberInput(value: string | number, step: string, label: string, min?: string) {
@@ -866,7 +1191,7 @@ function syncKindChrome() {
   must<HTMLElement>("#k-sbc2").hidden = kind !== "site";
   must<HTMLElement>("#k-site-note").hidden = kind !== "site";
   must<HTMLInputElement>("[name=sbc-k]").setAttribute("aria-describedby", kind === "site" ? "k-caption-site" : "k-caption");
-  writeLede(kind === "site" ? siteLede() : LINEAR_LEDE);
+  writeLede(kind === "site" ? siteLede() : linearLede());
   text("#sbc-empty", kind === "site" ? SITE_EMPTY : LINEAR_EMPTY);
   text("#tip-sbc-row", kind === "site" ? SITE_ROW_TIP : LINEAR_ROW_TIP);
   text("#tip-sbc-x", kind === "site" ? SITE_X_TIP : LINEAR_X_TIP);
@@ -936,7 +1261,15 @@ function indexText() {
 }
 
 function siteLede() {
-  return `${SITE_TITLE}\nИндекс IV квартала 2026 к этой базе — ${indexText()}.`;
+  return editionLede(SITE_TITLE);
+}
+
+function linearLede() {
+  return editionLede(LINEAR_TITLE);
+}
+
+function editionLede(title: string) {
+  return `${title}\nИндекс квартала к этой базе — ${indexText()}.`;
 }
 
 function writeLede(value: string) {
@@ -996,6 +1329,402 @@ function sanitizeFactors(value: unknown): Partial<Record<SbcFactor, boolean>> {
   return factors;
 }
 
+function blankPhase(index: number, like?: PhaseDraft): PhaseDraft {
+  const inherited = like?.kind;
+  return {
+    id: uid("phase"),
+    name: `Этап ${index + 1}`,
+    kind: inherited === "linear" || inherited === "site" ? inherited : "site",
+    stage: like?.stage ?? "r",
+    works: [{ ref: "", qty: 1, price: 0 }],
+    extras: [],
+    buckets: emptyBuckets(),
+  };
+}
+
+function hydratePhase() {
+  const phase = phases[activePhase];
+  if (!phase) return;
+  mute = true;
+  kind = phase.kind;
+  buckets = cloneBuckets(phase.buckets);
+  sbcLines = kind ? buckets[kind].lines : [];
+  applyStage(phase.stage);
+  document.querySelectorAll<HTMLInputElement>('input[name="object-kind"]').forEach((input) => {
+    input.checked = input.value === kind;
+  });
+  must<HTMLInputElement>("[name=sbc-k]").value = String(kind ? buckets[kind].k : 1);
+  must<HTMLInputElement>("[name=sbc-index]").value = String(sbcIndex);
+  must<HTMLInputElement>("#phase-count").value = String(phases.length);
+  renderPhaseNames();
+  renderPhaseSwitch();
+  fillWorks(phase.works);
+  document.querySelectorAll<HTMLInputElement>('#card input[name="extra"]').forEach((input) => {
+    input.checked = phase.extras.includes(input.value);
+  });
+  syncKindChrome();
+  renderSbc();
+  mute = false;
+}
+
+function fillWorks(works: WorkDraft[]) {
+  must("#works tbody").replaceChildren();
+  const rows = works.length ? works : [{ ref: "", qty: 1, price: 0 }];
+  rows.forEach((item) => appendWork(item));
+}
+
+function renderPhaseNames() {
+  const host = must("#phase-names");
+  const current = document.activeElement;
+  const focusIndex = current instanceof HTMLInputElement ? current.dataset.phaseName ?? "" : "";
+  const caret = current instanceof HTMLInputElement ? current.selectionStart : null;
+  host.replaceChildren();
+  phases.forEach((phase, index) => {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = "phase-name";
+    input.dataset.phaseName = String(index);
+    input.value = phase.name;
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", `Наименование этапа ${index + 1}`);
+    label.append(`Наименование этапа ${index + 1}`, input);
+    host.append(label);
+  });
+  if (!focusIndex) return;
+  const input = host.querySelector<HTMLInputElement>(`[data-phase-name="${focusIndex}"]`);
+  if (!input) return;
+  input.focus();
+  if (caret !== null) input.setSelectionRange(caret, caret);
+}
+
+function renderPhaseSwitch() {
+  ["phase-switch", "phase-switch-sbc"].forEach((id) => {
+    const host = document.getElementById(id);
+    if (!host) return;
+    const keepFocus = host.contains(document.activeElement);
+    host.replaceChildren();
+    phases.forEach((phase, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", index === activePhase ? "true" : "false");
+      button.tabIndex = index === activePhase ? 0 : -1;
+      button.textContent = phase.name.trim() || `Этап ${index + 1}`;
+      button.addEventListener("click", () => activatePhase(index));
+      host.append(button);
+    });
+    if (keepFocus) host.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();
+  });
+  const phase = phases[activePhase];
+  text("#phase-legend", phase?.name.trim() || "Расчёт этапа");
+  text("#phase-hint", phaseHint());
+}
+
+function phaseHint() {
+  const phase = phases[activePhase];
+  const name = phase?.name.trim() || `Этап ${activePhase + 1}`;
+  if (phases.length < 2) return `Сейчас один этап «${name}». Число этапов задаётся в карточке объекта.`;
+  return `Считаем «${name}». Тип, стадия, работы, опции и СБЦ у каждого этапа свои. Сводка всех этапов — в коммерческом КП.`;
+}
+
+function bindPhaseTabs() {
+  document.querySelectorAll<HTMLElement>(".phase-tabs").forEach((host) => {
+    host.addEventListener("keydown", (event) => {
+      if (!(event instanceof KeyboardEvent)) return;
+      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const buttons = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+      const index = buttons.findIndex((button) => button === document.activeElement);
+      if (index < 0) return;
+      event.preventDefault();
+      let next = index;
+      if (event.key === "ArrowRight") next = (index + 1) % buttons.length;
+      if (event.key === "ArrowLeft") next = (index - 1 + buttons.length) % buttons.length;
+      if (event.key === "Home") next = 0;
+      if (event.key === "End") next = buttons.length - 1;
+      const target = buttons[next];
+      target?.focus();
+      target?.click();
+    });
+  });
+}
+
+function activatePhase(index: number) {
+  if (index === activePhase || !phases[index]) return;
+  commitActive();
+  activePhase = index;
+  hydratePhase();
+  if (currentView === "sbc" && !kind) show("desk");
+  paint();
+}
+
+function resizePhases(raw: number) {
+  const count = Math.min(PHASE_MAX, Math.max(1, Math.round(raw) || phases.length));
+  const input = must<HTMLInputElement>("#phase-count");
+  if (count === phases.length) {
+    input.value = String(count);
+    return;
+  }
+  commitActive();
+  if (count < phases.length) {
+    const doomed = phases.slice(count);
+    if (doomed.some(phaseHasCalc)) {
+      const ok = window.confirm(`Убрать этапы ${count + 1}–${phases.length}? Их расчёт сотрётся.`);
+      if (!ok) {
+        input.value = String(phases.length);
+        return;
+      }
+    }
+    phases = phases.slice(0, count);
+    if (activePhase >= count) activePhase = count - 1;
+  } else {
+    while (phases.length < count) phases.push(blankPhase(phases.length, phases.at(-1)));
+  }
+  input.value = String(phases.length);
+  hydratePhase();
+  paint();
+}
+
+function commitActive() {
+  const phase = phases[activePhase];
+  if (!phase || mute) return;
+  readPhaseNames();
+  phase.kind = kind;
+  phase.stage = asStage(field("stage") || phase.stage);
+  phase.works = readWorks();
+  phase.extras = readExtras();
+  if (kind === "linear" || kind === "site") {
+    buckets[kind].k = readK();
+    buckets[kind].lines = sbcLines;
+  }
+  phase.buckets = cloneBuckets(buckets);
+}
+
+function readPhaseNames() {
+  document.querySelectorAll<HTMLInputElement>("[data-phase-name]").forEach((input) => {
+    const index = Number(input.dataset.phaseName);
+    if (!phases[index]) return;
+    phases[index].name = input.value;
+  });
+}
+
+function cloneBuckets(source: Record<ObjectKind, Bucket>): Record<ObjectKind, Bucket> {
+  return {
+    linear: { k: source.linear.k, lines: source.linear.lines.map(cloneLine) },
+    site: { k: source.site.k, lines: source.site.lines.map(cloneLine) },
+  };
+}
+
+function cloneLine(line: SbcLineInput): SbcLineInput {
+  return { ...line, factors: { ...line.factors } };
+}
+
+function projectSnapshots(): Snapshot[] {
+  commitActive();
+  return phases.map((phase) => {
+    const sbc = sbcOf(phase);
+    const quote = quoteCard({
+      works: phase.works,
+      extras: phase.extras,
+      sbcNow: sbc?.now ?? 0,
+    }, catalog);
+    return { phase, quote, sbc };
+  });
+}
+
+function sbcOf(phase: PhaseDraft) {
+  if (phase.kind !== "linear" && phase.kind !== "site") return null;
+  const bucket = phase.buckets[phase.kind];
+  return quoteSbc({
+    stage: phase.stage,
+    k: bucket.k,
+    index: sbcIndex,
+    lines: bucket.lines,
+    edition: phase.kind,
+  });
+}
+
+function offerOf(quote: Quote) {
+  const works = quote.lines
+    .filter((item) => item.qty > 0 && item.sum > 0)
+    .reduce((acc, item) => acc + scaleMoney(item.sum, adjustPercent), 0);
+  const extras = quote.extras
+    .filter((item) => item.sum > 0)
+    .reduce((acc, item) => acc + scaleMoney(item.sum, adjustPercent), 0);
+  return works + extras;
+}
+
+function paintFork(items: Snapshot[]) {
+  const body = must("#fork-lines");
+  body.replaceChildren();
+  let cost = 0;
+  let reference = 0;
+  let offer = 0;
+  items.forEach((item) => {
+    const rowCost = item.quote.total;
+    const rowSbc = item.sbc?.now ?? 0;
+    const rowOffer = offerOf(item.quote);
+    cost += rowCost;
+    reference += rowSbc;
+    offer += rowOffer;
+    body.append(forkRow(item.phase.name.trim() || "Этап", rowCost, rowSbc, rowOffer, false));
+  });
+  const foot = must<HTMLElement>("#fork-total");
+  foot.replaceChildren();
+  if (items.length > 1) {
+    foot.hidden = false;
+    foot.append(forkRow("Все этапы", cost, reference, offer, true));
+  } else {
+    foot.hidden = true;
+  }
+}
+
+function forkRow(name: string, cost: number, sbc: number, offer: number, head: boolean) {
+  const tr = document.createElement("tr");
+  const title = document.createElement(head ? "th" : "td");
+  if (title instanceof HTMLTableCellElement && head) title.scope = "row";
+  title.textContent = name;
+  tr.append(title, moneyCell(cost), moneyCell(sbc), moneyCell(offer), plainCell(gapText(cost, offer)), plainCell(gapText(sbc, offer)));
+  return tr;
+}
+
+function moneyCell(value: number) {
+  const td = document.createElement("td");
+  td.className = "num";
+  td.textContent = value > 0 ? money.format(value) : "—";
+  return td;
+}
+
+function plainCell(value: string) {
+  const td = document.createElement("td");
+  td.className = "num";
+  td.textContent = value;
+  return td;
+}
+
+function gapText(base: number, value: number) {
+  if (base <= 0 || value <= 0) return "—";
+  const ratio = (value - base) / base;
+  const formatted = pct.format(ratio);
+  return ratio > 0 ? `+${formatted}` : formatted;
+}
+
+function stageLabel(stage: Stage) {
+  if (stage === "p") return "П";
+  if (stage === "r") return "Р";
+  return "П+Р";
+}
+
+function fillEditable(selector: string, value: string) {
+  const el = must<HTMLElement>(selector);
+  const key = el.dataset.editKey || "";
+  if (forceProposal && key) delete letterEdits[key];
+  const stored = !forceProposal && key && Object.prototype.hasOwnProperty.call(letterEdits, key)
+    ? letterEdits[key]
+    : value;
+  if (el.textContent === stored) return;
+  el.textContent = stored;
+}
+
+function bindLetter() {
+  must("#kp-letter").addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const key = target.dataset.editKey;
+    if (!key) return;
+    letterEdits[key] = target.textContent ?? "";
+    persistProject();
+  });
+}
+
+function applyStaticEdits() {
+  document.querySelectorAll<HTMLElement>("#kp-letter [data-edit-key][data-origin]").forEach((el) => {
+    const key = el.dataset.editKey || "";
+    if (Object.prototype.hasOwnProperty.call(letterEdits, key)) el.textContent = letterEdits[key];
+  });
+}
+
+function resetLetter() {
+  letterEdits = {};
+  document.querySelectorAll<HTMLElement>("#kp-letter [data-origin]").forEach((el) => {
+    el.textContent = el.dataset.origin ?? "";
+  });
+  proposalStructure = "";
+  proposalMoney = "";
+  forceProposal = true;
+  paint();
+  forceProposal = false;
+}
+
+function readAdjust() {
+  return finiteNumber(must<HTMLInputElement>("#kp-adjust").value);
+}
+
+function finiteNumber(value: unknown) {
+  const raw = Number(value);
+  return Number.isFinite(raw) ? raw : 0;
+}
+
+function setNamedField(name: string, value: unknown) {
+  if (typeof value !== "string") return;
+  const el = form.elements.namedItem(name);
+  if (el instanceof HTMLSelectElement && ![...el.options].some((option) => option.value === value)) return;
+  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = value;
+}
+
+function isProject(value: unknown): value is {
+  phases: unknown[];
+  active?: unknown;
+  customer?: unknown;
+  object?: unknown;
+  region?: unknown;
+  adjustPercent?: unknown;
+  index?: unknown;
+  letter?: unknown;
+} {
+  return !!value && typeof value === "object" && Array.isArray((value as { phases?: unknown }).phases);
+}
+
+function sanitizeLetter(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter((entry): entry is [string, string] => typeof entry[0] === "string" && entry[0].length < 240 && typeof entry[1] === "string")
+      .slice(0, 400)
+      .map(([key, text]) => [key, text.slice(0, 2000)]),
+  );
+}
+
+function sanitizePhase(value: unknown, index: number): PhaseDraft {
+  const blank = blankPhase(index);
+  if (!value || typeof value !== "object") return blank;
+  const item = value as Partial<PhaseDraft>;
+  const stored = item.buckets;
+  return {
+    id: typeof item.id === "string" && item.id ? item.id : blank.id,
+    name: typeof item.name === "string" ? item.name : blank.name,
+    kind: item.kind === "linear" || item.kind === "site" ? item.kind : "site",
+    stage: asStage(typeof item.stage === "string" ? item.stage : "r"),
+    works: Array.isArray(item.works) && item.works.length ? item.works.map(sanitizeWork) : blank.works,
+    extras: Array.isArray(item.extras) ? item.extras.filter((entry): entry is string => typeof entry === "string") : [],
+    buckets: {
+      linear: sanitizeBucket(stored && typeof stored === "object" ? stored.linear : null),
+      site: sanitizeBucket(stored && typeof stored === "object" ? stored.site : null),
+    },
+  };
+}
+
+function sanitizeWork(value: unknown): WorkDraft {
+  if (!value || typeof value !== "object") return { ref: "", qty: 1, price: 0 };
+  const item = value as WorkDraft;
+  const price = Number(item.price);
+  return {
+    ref: typeof item.ref === "string" ? item.ref : "",
+    qty: Number(item.qty) || 0,
+    price: Number.isFinite(price) ? price : 0,
+  };
+}
+
 function applyStage(stage: string) {
   const value = asStage(stage);
   const card = document.querySelector<HTMLInputElement>(`#card input[name="stage"][value="${value}"]`);
@@ -1006,5 +1735,5 @@ function applyStage(stage: string) {
 
 function asStage(value: string): Stage {
   if (value === "p" || value === "r" || value === "pr") return value;
-  return "pr";
+  return "r";
 }

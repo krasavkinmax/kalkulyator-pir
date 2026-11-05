@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { seedCatalog } from "../data/seed.ts";
 import type { CardInput } from "./types.ts";
-import { quoteCard } from "./quote.ts";
+import { quoteCard, scaleMoney } from "./quote.ts";
 
 const mixed: CardInput = {
   works: [
@@ -85,6 +85,13 @@ describe("quoteCard", () => {
       ["Срочность", 1500],
     ]);
     assert.equal(quote.total, 19650);
+  });
+
+  it("меняет сумму письма на процент корректировки", () => {
+    assert.equal(scaleMoney(100000, 10), 110000);
+    assert.equal(scaleMoney(100000, -10), 90000);
+    assert.equal(scaleMoney(100000, 0), 100000);
+    assert.equal(scaleMoney(100000, Number.NaN), 100000);
   });
 
   it("оставляет пустую таблицу без цены", () => {

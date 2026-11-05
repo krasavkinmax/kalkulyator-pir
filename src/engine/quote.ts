@@ -77,3 +77,10 @@ export function quoteCard(input: CardInput, catalog: CatalogPosition[]): Quote {
 
   return { lines, price, extras, total, sbcNow: input.sbcNow, tone, short, note, empty };
 }
+
+/** Процент к сумме письма: 10 → +10%, −10 → −10%. */
+export function scaleMoney(amount: number, percent: number) {
+  const base = Number.isFinite(amount) ? amount : 0;
+  const shift = Number.isFinite(percent) ? percent : 0;
+  return Math.round(base * (1 + shift / 100));
+}

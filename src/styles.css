@@ -161,6 +161,7 @@ select:user-invalid {
   .tabs button,
   .toolbar button,
   .sheet-actions button,
+  .kp-manager button,
   .icon-btn {
     transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -174,7 +175,12 @@ select:user-invalid {
 h1,
 fieldset,
 .table-wrapper,
-#proposal {
+.phase-bar,
+#desk,
+#book,
+#sbc,
+#proposal,
+.kp-letter {
   scroll-margin-top: 5.5rem;
 }
 
@@ -224,6 +230,24 @@ label,
 }
 
 .span-row { grid-column: 1 / -1; }
+
+.phase-names {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.95rem 1.1rem;
+  margin-top: 0.95rem;
+}
+
+.phase-bar { margin: 0 0 1.1rem; }
+
+.phase-tabs { width: fit-content; max-inline-size: 100%; }
+
+.phase-tabs button {
+  max-inline-size: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .choices { display: flex; flex-wrap: wrap; gap: 0.45rem 1.1rem; }
 .choices label { flex-direction: row; align-items: center; color: var(--ink); }
 .extra-list {
@@ -390,10 +414,44 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
-.k-table { min-inline-size: 52rem; }
+.k-table {
+  min-inline-size: 0;
+  inline-size: 100%;
+  table-layout: fixed;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.k-table col.k-name { width: 22%; }
+
+.k-table caption {
+  padding: 0.35rem 0.15rem 0.4rem;
+  font-size: 0.95rem;
+}
+
+.k-table th,
+.k-table td {
+  padding: 0.28rem 0.4rem;
+  border-block-end: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.k-table tr > :last-child { border-inline-end: 0; }
+
+.k-table tbody tr:last-child > * { border-block-end: 0; }
+
+.k-table thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
 .table-wrapper.fit { max-block-size: none; }
 
-.k-guide { margin-top: 0.9rem; }
+.k-guide { margin-top: 0.55rem; }
+
+.table-wrapper.k-guide { max-block-size: none; }
 #sbc > fieldset { margin-top: 1.35rem; }
 
 .k-table thead th:first-child {
@@ -510,7 +568,8 @@ th.num { text-align: end; }
 }
 
 .toolbar button,
-.sheet-actions button {
+.sheet-actions button,
+.kp-manager button {
   font: inherit;
   min-block-size: 2.7rem;
   padding: 0.45rem 1rem;
@@ -522,19 +581,22 @@ th.num { text-align: end; }
 }
 
 .toolbar button:hover:not(:disabled),
-.sheet-actions button:hover:not(:disabled) {
+.sheet-actions button:hover:not(:disabled),
+.kp-manager button:hover:not(:disabled) {
   background: color-mix(in oklab, var(--accent) 84%, var(--ink));
 }
 
 .toolbar button.quiet,
-.sheet-actions button.quiet {
+.sheet-actions button.quiet,
+.kp-manager button.quiet {
   background: var(--sheet);
   color: var(--ink);
   border-color: var(--line);
 }
 
 .toolbar button.quiet:hover:not(:disabled),
-.sheet-actions button.quiet:hover:not(:disabled) {
+.sheet-actions button.quiet:hover:not(:disabled),
+.kp-manager button.quiet:hover:not(:disabled) {
   background: var(--accent-soft);
   border-color: color-mix(in oklab, var(--accent) 35%, var(--line));
 }
@@ -576,9 +638,15 @@ details { margin: 0 0 1.25rem; color: var(--soft); }
 details p { max-width: 70ch; }
 summary { cursor: pointer; font-weight: 600; color: var(--ink); }
 
-#proposal {
-  width: min(42rem, calc(100% - 2rem));
+.kp-sheet {
+  width: min(72rem, calc(100% - 2rem));
   margin: 1.75rem auto 3.5rem;
+}
+
+.kp-letter {
+  width: min(42rem, 100%);
+  margin-top: 1.25rem;
+  margin-inline: auto;
   padding: 2.4rem 2.1rem 2.5rem;
   background: var(--sheet);
   color: var(--ink);
@@ -589,12 +657,12 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
   font-family: Literata, Georgia, serif;
 }
 
-#proposal h1 {
+.kp-letter h1 {
   font-weight: 600;
   font-size: clamp(1.9rem, 1.4rem + 1vw, 2.45rem);
 }
 
-#proposal p { max-width: 68ch; text-wrap: pretty; }
+.kp-letter p { max-width: 68ch; text-wrap: pretty; }
 
 .letter-head {
   display: flex;
@@ -605,15 +673,131 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
   font-size: 0.95rem;
 }
 
-#proposal table {
-  font-family: "Golos Text", "Segoe UI", sans-serif;
-  font-size: 0.95rem;
+#kp-work {
+  margin: 0;
+  max-inline-size: 36rem;
+  font-weight: 600;
+  text-wrap: balance;
 }
 
-#proposal .sum-row td {
+.kp-letter [contenteditable="plaintext-only"] {
+  cursor: text;
+  white-space: pre-wrap;
+  border-radius: 0.25rem;
+}
+
+.kp-letter [contenteditable="plaintext-only"]:hover {
+  background: color-mix(in oklab, var(--field) 70%, transparent);
+}
+
+.kp-letter [contenteditable="plaintext-only"]:focus {
+  background: var(--field);
+  outline-offset: -3px;
+}
+
+.kp-letter .kp-sign {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 1fr);
+  align-items: end;
+  column-gap: 0.85rem;
+  max-inline-size: 28rem;
+  margin-block-start: 1.75rem;
+  font-family: "Golos Text", "Segoe UI", sans-serif;
+}
+
+.kp-letter .kp-sign label {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.kp-letter .kp-sign input[type="text"] {
+  inline-size: 100%;
+  min-block-size: 2.1rem;
+  padding: 0.15rem 0.2rem 0.2rem;
+  border: 0;
+  border-radius: 0;
+  border-block-end: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+.kp-letter table {
+  font-family: "Golos Text", "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.kp-letter th,
+.kp-letter td {
+  padding: 0.32rem 0.45rem;
+}
+
+.kp-letter .phase-row td {
+  padding-block: 0.7rem 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  background: transparent;
+  border-block-end: 0;
+}
+
+.kp-letter .pack td:first-child {
+  line-height: 1.35;
+  columns: 2;
+  column-gap: 1.25rem;
+}
+
+.kp-letter .works-sum td {
+  font-weight: 600;
+}
+
+.kp-letter .subtotal td {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.kp-letter .sum-row td {
   font-weight: 700;
   border-block-end: 0;
   font-size: 1.05rem;
+}
+
+.kp-manager {
+  margin-top: 0;
+  padding: 1.05rem 1.15rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink);
+  font-family: "Golos Text", "Segoe UI", sans-serif;
+}
+
+.kp-manager h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.fork-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.8rem 1rem;
+  margin-top: 0.85rem;
+}
+
+.fork-tools label { flex: 1 1 16rem; max-inline-size: 22rem; }
+
+.kp-manager .table-wrapper { margin-top: 0.85rem; }
+
+.kp-manager tfoot th,
+.kp-manager tfoot td {
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .sheet-actions {
@@ -694,6 +878,14 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
     color: var(--soft);
     font-size: 0.82rem;
   }
+
+  .k-table th,
+  .k-table td,
+  .k-table tr > :last-child,
+  .k-table tbody tr:last-child > * {
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--line);
+  }
 }
 
 @media (max-width: 700px) {
@@ -720,16 +912,18 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
   .signal span { flex: 1; text-align: center; }
 
   .wrap,
-  #proposal {
+  .kp-sheet {
     width: min(72rem, calc(100% - 1rem));
     margin-block: 0.9rem calc(2rem + env(safe-area-inset-bottom, 0px));
   }
 
-  #proposal { padding: 1.25rem 0.9rem 1.5rem; }
+  .kp-letter { padding: 1.25rem 0.9rem 1.5rem; }
+  .kp-letter .pack td:first-child { columns: 1; }
   .letter-head { flex-direction: column; }
 
   .toolbar button,
-  .sheet-actions button { flex: 1 1 10rem; }
+  .sheet-actions button,
+  .kp-manager button { flex: 1 1 10rem; }
 
   input[type="text"],
   input[type="number"],
@@ -748,9 +942,14 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
     display: block !important;
     width: auto;
     margin: 0;
+  }
+  .kp-letter {
+    width: auto;
+    margin: 0;
     box-shadow: none;
     border: 0;
     border-radius: 0;
   }
+  .kp-manager,
   .sheet-actions { display: none !important; }
 }
