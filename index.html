@@ -8,17 +8,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Literata:opsz,wght@7..72,480;7..72,650&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-DgR6VWk-.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-A9qEhrMz.css">
+  <script type="module" crossorigin src="./assets/index-DeznvGpW.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-oOq5Ut2S.css">
 </head>
 <body>
   <a class="skip" href="#object-title">К карточке объекта</a>
   <header class="rail">
     <p class="brand">Калькулятор ПИР</p>
     <nav class="tabs" role="tablist" aria-label="Вид расчёта">
-      <button type="button" id="tab-desk" role="tab" aria-selected="true" aria-controls="desk" tabindex="0">Расчёт</button>
-      <button type="button" id="tab-book" role="tab" aria-selected="false" aria-controls="book" tabindex="-1">Базовая стоимость</button>
-      <button type="button" id="tab-sbc" role="tab" aria-selected="false" aria-controls="sbc" tabindex="-1">Стоимость в СБЦ</button>
+      <button type="button" id="tab-desk" role="tab" aria-selected="true" aria-controls="desk" tabindex="0">Себестоимость</button>
+      <button type="button" id="tab-sbc" role="tab" aria-selected="false" aria-controls="sbc" tabindex="-1" disabled title="Сначала выберите тип объекта">Стоимость в СБЦ</button>
       <button type="button" id="tab-kp" role="tab" aria-selected="false" aria-controls="proposal" tabindex="-1">Коммерческое КП</button>
     </nav>
     <div class="signal" id="signal" role="status" aria-live="polite">
@@ -46,11 +45,18 @@
               <option value="Не Москва" selected>Не Москва</option>
             </select>
           </label>
-          <div class="choice span-row">Стадия по пункту 1.7
+          <div class="choice span-row">Тип объекта
             <div class="choices">
-              <label><input type="radio" name="stage" value="p"> П, 60%</label>
-              <label><input type="radio" name="stage" value="r"> Р, 40%</label>
-              <label><input type="radio" name="stage" value="pr" checked> П+Р, 100%</label>
+              <label><input type="radio" name="object-kind" value="linear"> Линейный объект</label>
+              <label><input type="radio" name="object-kind" value="site"> Внутриплощадочные сети</label>
+            </div>
+            <p class="hint" id="kind-hint">Выберите тип, и откроется вкладка «Стоимость в СБЦ».</p>
+          </div>
+          <div class="choice span-row"><span id="card-stage-label">Стадия</span>
+            <div class="choices">
+              <label><input type="radio" name="stage" value="p"> <span id="card-stage-p">П</span></label>
+              <label><input type="radio" name="stage" value="r"> <span id="card-stage-r">Р</span></label>
+              <label><input type="radio" name="stage" value="pr" checked> <span id="card-stage-pr">П+Р</span></label>
             </div>
           </div>
         </div>
@@ -82,6 +88,7 @@
       <p class="hint" id="works-empty">Добавьте строку и выберите работу из списка.</p>
       <div class="toolbar">
         <button type="button" id="add-work" class="quiet">Добавить работу</button>
+        <button type="button" id="open-book" class="quiet">Новая работа (в базу)</button>
       </div>
       <fieldset>
         <legend>Опции</legend>
@@ -101,8 +108,8 @@
 
   </main>
 
-  <section class="wrap" id="book" role="tabpanel" aria-labelledby="tab-book" hidden tabindex="-1">
-    <h1>Базовая стоимость</h1>
+  <section class="wrap" id="book" aria-labelledby="book-title" hidden tabindex="-1">
+    <h1 id="book-title">Базовая стоимость</h1>
     <p class="lede">Общая база для всех объектов в этом браузере. Примечания пустые: их пишете вы. Базовая цена каждой позиции — 50 000 ₽, позже разведём ставки по видам работ.</p>
     <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="book-caption">
       <table id="book-table">
@@ -147,24 +154,69 @@
 
   <section class="wrap" id="sbc" role="tabpanel" aria-labelledby="tab-sbc" hidden tabindex="-1">
     <h1>Стоимость в СБЦ</h1>
-    <p class="lede">Отдельный расчёт проектных работ по СБЦП 81-2001-17 «Объекты водоснабжения и канализации». Табличные a и b даны в тысячах рублей на 01.01.2001. На IV квартал 2026 индекс проектных работ к этой базе — 7,22: письмо Минстроя от 26.10.2026 № 66866-ИФ/09 новый индекс ПИР не публикует, поэтому по письму от 25.12.2017 № 58300-ОГ/09 оставлен индекс III квартала (письмо от 23.07.2026 № 45358-ИФ/09). В коммерческую цену и в КП эта сумма не входит.</p>
+    <p class="lede" id="sbc-lede">Отдельный расчёт проектных работ по СБЦП 81-2001-17 «Объекты водоснабжения и канализации». Табличные a и b даны в тысячах рублей на 01.01.2001. На IV квартал 2026 индекс проектных работ к этой базе — 7,22: письмо Минстроя от 26.10.2026 № 66866-ИФ/09 новый индекс ПИР не публикует, поэтому по письму от 25.12.2017 № 58300-ОГ/09 оставлен индекс III квартала (письмо от 23.07.2026 № 45358-ИФ/09). В коммерческую цену и в КП эта сумма не входит.</p>
     <form id="sbc-form" action="#sbc" method="post">
       <fieldset>
         <legend>Множители справочника</legend>
         <div class="fields">
-          <div class="choice">Стадия по пункту 1.7
+          <div class="choice"><span id="sbc-stage-label">Стадия по пункту 1.7</span>
             <div class="choices">
-              <label><input type="radio" name="sbc-stage" value="p"> П, 60%</label>
-              <label><input type="radio" name="sbc-stage" value="r"> Р, 40%</label>
-              <label><input type="radio" name="sbc-stage" value="pr" checked> П+Р, 100%</label>
+              <label><input type="radio" name="sbc-stage" value="p"> <span id="sbc-stage-p">П, 60%</span></label>
+              <label><input type="radio" name="sbc-stage" value="r"> <span id="sbc-stage-r">Р, 40%</span></label>
+              <label><input type="radio" name="sbc-stage" value="pr" checked> <span id="sbc-stage-pr">П+Р, 100%</span></label>
             </div>
           </div>
           <label>Ценообразующий коэффициент
             <input name="sbc-k" type="number" min="0" step="0.01" value="1" aria-describedby="k-caption">
           </label>
+          <label>Индекс квартала
+            <input name="sbc-index" type="number" min="0" step="0.01" value="7.22" inputmode="decimal" autocomplete="off">
+          </label>
         </div>
-        <div class="table-wrapper k-guide" tabindex="0" role="region" aria-labelledby="k-caption">
-          <table id="k-table">
+
+      </fieldset>
+      <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-caption">
+        <table id="sbc-table">
+          <caption id="sbc-caption">Строки справочника</caption>
+          <thead>
+            <tr>
+              <th><button type="button" class="col-help" interestfor="tip-sbc-row">Строка</button></th>
+              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-x">Показатель</button></th>
+              <th id="sbc-factor-head" hidden>Условия</th>
+              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-a">a</button></th>
+              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-b">b</button></th>
+              <th class="num">IV кв. 2026</th>
+              <th><span class="vh">Действие</span></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint" id="sbc-empty">Добавьте строку. В списке таблицы 3, 8, 18 и часть таблиц 16 и 17. Остальные пункты вводятся как своя строка: цена в тыс. руб. равна a + b × показатель, а если b пустое — a × показатель.</p>
+      <div popover="hint" id="tip-sbc-row" class="col-tip">Пункт СБЦП 81-2001-17. Он задаёт a, b и единицу показателя. Кольцевой водопровод — таблица 16, самотечная канализация — 17, водовод — 3, коллектор и закрытый переход — 8, дренаж — 18. Расход в названии строки выбирает пункт. В колонку «Показатель» он не пишется.</div>
+      <div popover="hint" id="tip-sbc-x" class="col-tip">Величина X из проекта, в единицах выбранной строки. Единица показана рядом с полем. Для таблиц 3, 16 и 17 это длина сети в километрах. Для ГНБ, прессошнека и кольцевого дренажа — длина в метрах. Для пластового дренажа — площадь в квадратных метрах. Для камеры — число штук. Цена строки в тысячах рублей 2001 года равна a + b × показатель: длиннее сеть — выше цена. Если число выходит за интервал строки, под таблицей появится предупреждение.</div>
+      <div popover="hint" id="tip-sbc-a" class="col-tip">Постоянная часть базовой цены из справочника, тысячи рублей на 01.01.2001. Входит в цену строки один раз, пока вы остаётесь в этом пункте.</div>
+      <div popover="hint" id="tip-sbc-b" class="col-tip">Добавка за каждую единицу показателя, тоже тысячи рублей 2001 года. Один километр сети таблиц 16 и 17 добавляет ровно b. Прочерк значит, что добавки нет: цена строки равна a × показатель. Для камеры это цена одной штуки, умноженная на их число.</div>
+      <div class="toolbar">
+        <button type="button" id="add-sbc">Добавить строку</button>
+      </div>
+      <p class="hint" id="sbc-note" hidden></p>
+      <p class="warn" id="sbc-warn" hidden aria-live="polite"></p>
+    </form>
+    <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-total-caption">
+      <table class="totals">
+        <caption id="sbc-total-caption">Итог в ценах IV квартала 2026</caption>
+        <tbody>
+          <tr><th>База 2001, тыс. руб.</th><td id="sbc-base">—</td></tr>
+          <tr><th>После стадии и коэффициентов, тыс. руб.</th><td id="sbc-factored">—</td></tr>
+          <tr><th>Текущая стоимость, × <span id="sbc-index-readout">7,22</span></th><td id="sbc-now">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <fieldset>
+      <legend>Справка</legend>
+        <div class="table-wrapper k-guide" id="k-sbc1" tabindex="0" role="region" aria-labelledby="k-caption">
+          <table id="k-table" class="k-table">
             <caption id="k-caption">Предлагаемые коэффициенты. В поле — произведение подходящих чисел, иначе 1.</caption>
             <thead>
               <tr>
@@ -244,43 +296,71 @@
             </tbody>
           </table>
         </div>
-      </fieldset>
-      <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-caption">
-        <table id="sbc-table">
-          <caption id="sbc-caption">Строки справочника</caption>
-          <thead>
-            <tr>
-              <th><button type="button" class="col-help" interestfor="tip-sbc-row">Строка</button></th>
-              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-x">Показатель</button></th>
-              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-a">a</button></th>
-              <th class="num"><button type="button" class="col-help" interestfor="tip-sbc-b">b</button></th>
-              <th class="num">IV кв. 2026</th>
-              <th><span class="vh">Действие</span></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p class="hint" id="sbc-empty">Добавьте строку. В списке таблицы 3, 8, 18 и часть таблиц 16 и 17. Остальные пункты вводятся как своя строка: цена в тыс. руб. равна a + b × показатель, а если b пустое — a × показатель.</p>
-      <div popover="hint" id="tip-sbc-row" class="col-tip">Пункт СБЦП 81-2001-17. Он задаёт a, b и единицу показателя. Кольцевой водопровод — таблица 16, самотечная канализация — 17, водовод — 3, коллектор и закрытый переход — 8, дренаж — 18. Расход в названии строки выбирает пункт. В колонку «Показатель» он не пишется.</div>
-      <div popover="hint" id="tip-sbc-x" class="col-tip">Величина X из проекта, в единицах выбранной строки. Единица показана рядом с полем. Для таблиц 3, 16 и 17 это длина сети в километрах. Для ГНБ, прессошнека и кольцевого дренажа — длина в метрах. Для пластового дренажа — площадь в квадратных метрах. Для камеры — число штук. Цена строки в тысячах рублей 2001 года равна a + b × показатель: длиннее сеть — выше цена. Если число выходит за интервал строки, под таблицей появится предупреждение.</div>
-      <div popover="hint" id="tip-sbc-a" class="col-tip">Постоянная часть базовой цены из справочника, тысячи рублей на 01.01.2001. Входит в цену строки один раз, пока вы остаётесь в этом пункте.</div>
-      <div popover="hint" id="tip-sbc-b" class="col-tip">Добавка за каждую единицу показателя, тоже тысячи рублей 2001 года. Один километр сети таблиц 16 и 17 добавляет ровно b. Прочерк значит, что добавки нет: цена строки равна a × показатель. Для камеры это цена одной штуки, умноженная на их число.</div>
-      <div class="toolbar">
-        <button type="button" id="add-sbc">Добавить строку</button>
-      </div>
-      <p class="warn" id="sbc-warn" hidden aria-live="polite"></p>
-    </form>
-    <div class="table-wrapper" tabindex="0" role="region" aria-labelledby="sbc-total-caption">
-      <table class="totals">
-        <caption id="sbc-total-caption">Итог в ценах IV квартала 2026</caption>
-        <tbody>
-          <tr><th>База 2001, тыс. руб.</th><td id="sbc-base">—</td></tr>
-          <tr><th>После стадии и коэффициента, тыс. руб.</th><td id="sbc-factored">—</td></tr>
-          <tr><th>Текущая стоимость, × 7,22</th><td id="sbc-now">—</td></tr>
-        </tbody>
-      </table>
-    </div>
+        <div class="table-wrapper k-guide" id="k-sbc2" tabindex="0" role="region" aria-labelledby="k-caption-site" hidden>
+          <table id="k-table-site" class="k-table">
+            <caption id="k-caption-site">Предлагаемые коэффициенты СБЦП 81-2001-07. В поле — произведение подходящих чисел, иначе 1. Городские коэффициенты между собой не перемножаются.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Строка</th>
+                <th class="num" scope="col">Застройка 0,3–0,5</th>
+                <th class="num" scope="col">Застройка 0,5–0,8</th>
+                <th class="num" scope="col">Пересечений 5–10</th>
+                <th class="num" scope="col">Пересечений больше 10</th>
+                <th class="num" scope="col">Нежёсткая труба</th>
+                <th class="num" scope="col">Москва и Санкт-Петербург</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Табл. 4, водопровод, п. 1–12</th>
+                <td class="num" data-label="Застройка 0,3–0,5">1,20</td>
+                <td class="num" data-label="Застройка 0,5–0,8">1,40</td>
+                <td class="num" data-label="Пересечений 5–10">1,05</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Нежёсткая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 4, узлы</th>
+                <td class="num" data-label="Застройка 0,3–0,5">—</td>
+                <td class="num" data-label="Застройка 0,5–0,8">—</td>
+                <td class="num" data-label="Пересечений 5–10">—</td>
+                <td class="num" data-label="Пересечений больше 10">—</td>
+                <td class="num" data-label="Нежёсткая труба">—</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 5, открытая, п. 1–9</th>
+                <td class="num" data-label="Застройка 0,3–0,5">1,20</td>
+                <td class="num" data-label="Застройка 0,5–0,8">1,40</td>
+                <td class="num" data-label="Пересечений 5–10">1,05</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Нежёсткая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 5, ГНБ и прессошнек</th>
+                <td class="num" data-label="Застройка 0,3–0,5">1,20</td>
+                <td class="num" data-label="Застройка 0,5–0,8">1,40</td>
+                <td class="num" data-label="Пересечений 5–10">1,05</td>
+                <td class="num" data-label="Пересечений больше 10">1,10</td>
+                <td class="num" data-label="Нежёсткая труба">1,10</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+              <tr>
+                <th scope="row">Табл. 6 и 7, узлы</th>
+                <td class="num" data-label="Застройка 0,3–0,5">—</td>
+                <td class="num" data-label="Застройка 0,5–0,8">—</td>
+                <td class="num" data-label="Пересечений 5–10">—</td>
+                <td class="num" data-label="Пересечений больше 10">—</td>
+                <td class="num" data-label="Нежёсткая труба">—</td>
+                <td class="num" data-label="Москва и Санкт-Петербург">1,30</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint" id="k-site-note" hidden>Рельеф с оврагами на водопроводе и больше трёх разных грунтов на пунктах 1–9 канализации — до 1,2. План масштаба 1:200 — до 1,15. Эти числа тоже перемножаются в поле коэффициента.</p>
+    </fieldset>
   </section>
 
   <article id="proposal" role="tabpanel" aria-labelledby="tab-kp" hidden tabindex="-1">
@@ -302,7 +382,7 @@
     </table>
     <p id="kp-foot"></p>
     <div class="sheet-actions">
-      <button type="button" id="back-desk" class="quiet">Вернуться к расчёту</button>
+      <button type="button" id="back-desk" class="quiet">Вернуться к себестоимости</button>
       <button type="button" id="print-kp">Печать</button>
     </div>
   </article>
