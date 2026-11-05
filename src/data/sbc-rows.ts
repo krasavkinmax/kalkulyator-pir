@@ -1,4 +1,5 @@
 import type { SbcSourceRow } from "../engine/types.ts";
+import { SBC2_ROWS } from "./sbc2-rows.ts";
 
 function row(
   id: string,
@@ -10,7 +11,7 @@ function row(
   min: number | null,
   max: number | null,
 ): SbcSourceRow {
-  return { id, group, name, unit, a, b, min, max };
+  return { id, group, name, unit, a, b, min, max, factors: [], floor100: false, blockAboveMax: false };
 }
 
 export const SBC_ROWS: SbcSourceRow[] = [
@@ -46,5 +47,5 @@ export const SBC_ROWS: SbcSourceRow[] = [
 ];
 
 export function findSbcRow(id: string): SbcSourceRow {
-  return SBC_ROWS.find((item) => item.id === id) ?? SBC_ROWS[0];
+  return SBC_ROWS.find((item) => item.id === id) ?? SBC2_ROWS.find((item) => item.id === id) ?? SBC_ROWS[0];
 }

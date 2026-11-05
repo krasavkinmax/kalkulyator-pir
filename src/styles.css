@@ -390,12 +390,13 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
-#k-table { min-inline-size: 52rem; }
+.k-table { min-inline-size: 52rem; }
 .table-wrapper.fit { max-block-size: none; }
 
 .k-guide { margin-top: 0.9rem; }
+#sbc > fieldset { margin-top: 1.35rem; }
 
-#k-table thead th:first-child {
+.k-table thead th:first-child {
   position: sticky;
   inset-inline-start: 0;
   z-index: 4;
@@ -544,6 +545,23 @@ button[aria-disabled="true"] {
   cursor: not-allowed;
 }
 
+.line-factors {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.line-factors label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+#sbc-table td:first-child { min-inline-size: 16rem; }
+
 .checks { display: flex; flex-direction: column; gap: 0.55rem; }
 .checks label { flex-direction: row; align-items: center; color: var(--ink); }
 
@@ -631,25 +649,25 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
 
 @container (width < 40rem) {
   #works,
-  #k-table { min-inline-size: 0; }
+  .k-table { min-inline-size: 0; }
 
   #works,
   #works thead, #works tbody, #works tfoot, #works tr, #works th, #works td,
-  #k-table, #k-table thead, #k-table tbody, #k-table tr, #k-table th, #k-table td {
+  .k-table, .k-table thead, .k-table tbody, .k-table tr, .k-table th, .k-table td {
     display: block;
   }
 
   #works thead,
-  #k-table thead { display: none; }
+  .k-table thead { display: none; }
 
   #works caption,
-  #k-table caption {
+  .k-table caption {
     display: block;
     margin: 0.7rem 0.7rem 0;
   }
 
   #works tr,
-  #k-table tr {
+  .k-table tr {
     margin: 0.7rem;
     border: 1px solid var(--line);
     border-radius: 0.7rem;
@@ -658,7 +676,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
 
   #works tbody th,
   #works tfoot th,
-  #k-table tbody th {
+  .k-table tbody th {
     position: sticky;
     inset-block-start: 0;
     inset-inline-start: auto;
@@ -669,7 +687,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--ink); }
   #works tfoot td:last-child { display: none; }
 
   #works td::before,
-  #k-table td::before {
+  .k-table td::before {
     content: attr(data-label);
     display: block;
     text-align: start;

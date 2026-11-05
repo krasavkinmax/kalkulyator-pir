@@ -3,6 +3,9 @@ export type Place = "field" | "city" | "tight" | "recon";
 export type Depth = "d2" | "d4" | "deep";
 export type Method = "open" | "hdd" | "punch";
 export type Stage = "p" | "r" | "pr";
+export type ObjectKind = "linear" | "site";
+export type SbcEdition = "linear" | "site";
+export type SbcFactor = "pressure" | "parallel" | "rehab" | "builtIn" | "typical";
 export type Pack = "basic" | "standard" | "expert";
 export type Tone = "go" | "wait" | "stop";
 export type OptionKind = "bim" | "expert" | "data" | "watch";
@@ -73,6 +76,12 @@ export interface SbcSourceRow {
   b: number | null;
   min: number | null;
   max: number | null;
+  /** Отметки строки, которые программа умножает сама. */
+  factors: SbcFactor[];
+  /** Длина короче 100 м заменяется на 100, если интервал строки начинается со 100 м. */
+  floor100: boolean;
+  /** Длина выше закрытого интервала не входит в итог. */
+  blockAboveMax: boolean;
 }
 
 export interface SbcLineInput {
@@ -82,12 +91,16 @@ export interface SbcLineInput {
   a: number | null;
   b: number | null;
   customName: string;
+  factors?: Partial<Record<SbcFactor, boolean>>;
 }
 
 export interface SbcSheetInput {
   stage: Stage;
   k: number;
   lines: SbcLineInput[];
+  edition?: SbcEdition;
+  /** Индекс квартала к базе 01.01.2001. Пустое значение — индекс справочника. */
+  index?: number;
 }
 
 export interface SbcComputedLine {
@@ -97,6 +110,9 @@ export interface SbcComputedLine {
   a: number;
   b: number | null;
   x: number;
+  xUsed: number;
+  factor: number;
+  blocked: boolean;
   current: number;
 }
 
@@ -106,4 +122,5 @@ export interface SbcQuote {
   factored: number;
   now: number;
   warnings: string[];
+  notes: string[];
 }

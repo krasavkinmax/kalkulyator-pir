@@ -1,22 +1,45 @@
 import { EXTRAS } from "./data/extras.ts";
 import { SBC_ROWS } from "./data/sbc-rows.ts";
+import { SBC2_ROWS } from "./data/sbc2-rows.ts";
 import { COUNTS, SHEETS } from "./data/sheets.ts";
 import { normalizeCatalog, seedCatalog } from "./data/seed.ts";
 import { quoteCard, workRate } from "./engine/quote.ts";
 import { quoteSbc } from "./engine/sbc.ts";
 import type {
   CardInput,
+  ObjectKind,
   Position,
   Quote,
+  SbcFactor,
   SbcLineInput,
+  SbcSourceRow,
   Stage,
 } from "./engine/types.ts";
+import { SBC_INDEX } from "./data/sbc-book.ts";
 import { money, sbcNum } from "./format.ts";
 
 type View = "desk" | "book" | "sbc" | "kp";
 
 const BOOK_KEY = "pir-structure-book-v2";
-const SBC_KEY = "pir-sbc-sheet-v1";
+const SBC_KEY = "pir-sbc-sheet-v2";
+const SBC_KEY_V1 = "pir-sbc-sheet-v1";
+
+const FACTOR_LABEL: Record<SbcFactor, string> = {
+  pressure: "Напорная канализация, ×0,7",
+  parallel: "Параллельная линия, ×0,15",
+  rehab: "Санация, ×0,8",
+  builtIn: "Встроен в здание, ×0,4",
+  typical: "Типовой альбом, ×0,2",
+};
+
+const LINEAR_LEDE = "Отдельный расчёт проектных работ по СБЦП 81-2001-17 «Объекты водоснабжения и канализации». Табличные a и b даны в тысячах рублей на 01.01.2001. На IV квартал 2026 индекс проектных работ к этой базе — 7,22: письмо Минстроя от 26.10.2026 № 66866-ИФ/09 новый индекс ПИР не публикует, поэтому по письму от 25.12.2017 № 58300-ОГ/09 оставлен индекс III квартала (письмо от 23.07.2026 № 45358-ИФ/09). В коммерческую цену и в КП эта сумма не входит.";
+const SITE_TITLE = "СБЦП 81-2001-07 «Коммунальные инженерные сети и сооружения».";
+const LINEAR_EMPTY = "Добавьте строку. В списке таблицы 3, 8, 18 и часть таблиц 16 и 17. Остальные пункты вводятся как своя строка: цена в тыс. руб. равна a + b × показатель, а если b пустое — a × показатель.";
+const SITE_EMPTY = "Добавьте строку. В списке таблицы 4–7. Для труб длина короче 100 м считается как 100 м. Колодцы открытой канализации уже входят в пункты 1–9 таблицы 5.";
+const LINEAR_ROW_TIP = "Пункт СБЦП 81-2001-17. Он задаёт a, b и единицу показателя. Кольцевой водопровод — таблица 16, самотечная канализация — 17, водовод — 3, коллектор и закрытый переход — 8, дренаж — 18. Расход в названии строки выбирает пункт. В колонку «Показатель» он не пишется.";
+const SITE_ROW_TIP = "Пункт СБЦП 81-2001-07, таблицы 4–7. Диаметр и способ прокладки выбирают строку. В колонку «Показатель» пишется длина в метрах или число сооружений. Закрытый водопровод считается по ГНБ и прессошнеку таблицы 5.";
+const LINEAR_X_TIP = "Величина X из проекта, в единицах выбранной строки. Единица показана рядом с полем. Для таблиц 3, 16 и 17 это длина сети в километрах. Для ГНБ, прессошнека и кольцевого дренажа — длина в метрах. Для пластового дренажа — площадь в квадратных метрах. Для камеры — число штук. Цена строки в тысячах рублей 2001 года равна a + b × показатель: длиннее сеть — выше цена. Если число выходит за интервал строки, под таблицей появится предупреждение.";
+const SITE_X_TIP = "Величина X из проекта. Для труб это длина в метрах: короче 100 м в формулу идёт 100 м. Если длина выше закрытого интервала строки, сумма этой строки в итог не входит. Для узла, камеры и водомерного узла это число штук. Цена в тысячах рублей 2001 года равна a + b × показатель, а если b пустое — a × показатель.";
 
 const form = must<HTMLFormElement>("#card");
 const kpButton = must<HTMLButtonElement>("#tab-kp");
@@ -24,16 +47,23 @@ const openKpButton = must<HTMLButtonElement>("#open-kp");
 
 const tabs: { view: View; button: HTMLButtonElement }[] = [
   { view: "desk", button: must("#tab-desk") },
-  { view: "book", button: must("#tab-book") },
   { view: "sbc", button: must("#tab-sbc") },
   { view: "kp", button: kpButton },
 ];
 
+type Bucket = { k: number; lines: SbcLineInput[] };
+
 let catalog = loadBook();
-let sbcLines = loadSbc();
+let sbcIndex = SBC_INDEX;
+let kind: ObjectKind | null = null;
+let buckets: Record<ObjectKind, Bucket> = { linear: emptyBucket(), site: emptyBucket() };
+let sbcLines: SbcLineInput[] = [];
 
 form.addEventListener("input", (event) => {
   const target = event.target;
+  if (target instanceof HTMLInputElement && target.name === "object-kind" && (target.value === "linear" || target.value === "site")) {
+    applyKind(target.value);
+  }
   if (target instanceof HTMLInputElement && target.name === "stage") {
     applyStage(target.value);
     persistSbc();
@@ -61,7 +91,8 @@ form.addEventListener("click", (event) => {
   }
 });
 
-must("#add-work").addEventListener("click", () => addWork());
+must("#add-work").addEventListener("click", () => addWork(true));
+must("#open-book").addEventListener("click", () => show("book"));
 
 tabs.forEach((tab) => tab.button.addEventListener("click", () => {
   if (tab.view === "kp") openKp();
@@ -96,6 +127,7 @@ must("#save-card").addEventListener("click", () => {
     object: field("object"),
     customer: field("customer"),
     region: field("region"),
+    objectKind: kind,
     stage: field("stage"),
     works: quote.lines.filter((item) => item.sum > 0).map((item) => ({
       name: item.name,
@@ -145,7 +177,16 @@ must("#download-book").addEventListener("click", () => {
 });
 
 must("#add-sbc").addEventListener("click", () => {
-  sbcLines.push({ id: uid("sbc"), rowId: "t3-1", x: 1, a: 64.94, b: 34.77, customName: "" });
+  const source = activeRows().find((row) => row.id !== "custom") ?? activeRows()[0];
+  sbcLines.push({
+    id: uid("sbc"),
+    rowId: source.id,
+    x: source.floor100 ? 100 : 1,
+    a: source.a,
+    b: source.b,
+    customName: "",
+    factors: {},
+  });
   persistSbc();
   renderSbc();
   paint();
@@ -161,12 +202,14 @@ sbcForm.addEventListener("input", (event) => {
 });
 sbcForm.addEventListener("submit", (event) => event.preventDefault());
 
-restoreSbcFactors();
+loadStore();
 bindColumnTips();
 renderBook();
+syncKindChrome();
 renderSbc();
 renderExtras();
-paint();
+addWork(false);
+persistSbc();
 
 function bindColumnTips() {
   const nativeInterest = Object.prototype.hasOwnProperty.call(HTMLButtonElement.prototype, "interestForElement");
@@ -276,7 +319,7 @@ function paintProposal(quote: Quote) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
     td.colSpan = 3;
-    td.textContent = "В предложении пока нет строк. Вернитесь к расчёту и добавьте работу.";
+    td.textContent = "В предложении пока нет строк. Вернитесь к себестоимости и добавьте работу.";
     tr.append(td);
     body.append(tr);
   }
@@ -295,6 +338,7 @@ function paintProposal(quote: Quote) {
 }
 
 function show(view: View) {
+  if (view === "sbc" && !kind) return;
   const panels: Record<View, HTMLElement> = {
     desk: must("#desk"),
     book: must("#book"),
@@ -304,10 +348,13 @@ function show(view: View) {
   (Object.keys(panels) as View[]).forEach((name) => {
     panels[name].hidden = name !== view;
   });
+  const selected = tabs.some((tab) => tab.view === view);
   tabs.forEach((tab) => {
     const on = tab.view === view;
     tab.button.setAttribute("aria-selected", on ? "true" : "false");
-    if (!tab.button.disabled) tab.button.tabIndex = on ? 0 : -1;
+    if (tab.button.disabled) return;
+    const inTabOrder = on || (!selected && tab.view === "desk");
+    tab.button.tabIndex = inTabOrder ? 0 : -1;
   });
   if (view !== "desk") panels[view].focus();
 }
@@ -317,7 +364,7 @@ function openKp() {
   show("kp");
 }
 
-function addWork() {
+function addWork(focus: boolean) {
   const body = must("#works tbody");
   const row = document.createElement("tr");
   const no = document.createElement("th");
@@ -372,7 +419,7 @@ function addWork() {
   action.append(remove);
   row.append(no, nameCell, qtyCell, priceCell, sum, action);
   body.append(row);
-  select.focus();
+  if (focus) select.focus();
   paint();
 }
 
@@ -448,8 +495,13 @@ function readWorks() {
 
 function readSbcSheet() {
   const selected = document.querySelector<HTMLInputElement>('input[name="sbc-stage"]:checked');
-  const raw = Number(must<HTMLInputElement>("[name=sbc-k]").value);
-  return { stage: asStage(selected?.value || "pr"), k: raw, lines: sbcLines };
+  return {
+    stage: asStage(selected?.value || "pr"),
+    k: readK(),
+    index: readIndex(),
+    lines: sbcLines,
+    edition: kind === "site" ? "site" as const : "linear" as const,
+  };
 }
 
 function renderBook() {
@@ -511,6 +563,8 @@ function renderBook() {
 function renderSbc() {
   const body = must("#sbc-table tbody");
   body.replaceChildren();
+  const rows = activeRows();
+  must<HTMLElement>("#sbc-factor-head").hidden = kind !== "site";
   const sheet = quoteSbc(readSbcSheet());
   sheet.lines.forEach((item) => {
     const tr = document.createElement("tr");
@@ -519,7 +573,7 @@ function renderSbc() {
     select.setAttribute("aria-label", "Строка справочника");
     let group: string | null = null;
     let container: HTMLSelectElement | HTMLOptGroupElement = select;
-    SBC_ROWS.forEach((source) => {
+    rows.forEach((source) => {
       if (source.group !== group) {
         group = source.group;
         container = document.createElement("optgroup");
@@ -528,10 +582,11 @@ function renderSbc() {
       }
       container.append(option(source.id, source.name));
     });
-    select.value = item.line.rowId;
+    if ([...select.options].some((entry) => entry.value === item.line.rowId)) select.value = item.line.rowId;
     select.addEventListener("change", () => {
       item.line.rowId = select.value;
-      const source = SBC_ROWS.find((entry) => entry.id === select.value);
+      item.line.factors = {};
+      const source = rows.find((entry) => entry.id === select.value);
       if (source && source.id !== "custom") {
         item.line.a = source.a;
         item.line.b = source.b;
@@ -573,6 +628,8 @@ function renderSbc() {
       measure.append(unit);
     }
     xCell.append(measure);
+    const factorCell = document.createElement("td");
+    if (kind === "site") factorCell.append(factorBox(item.line, item.source, item.custom));
     const aCell = document.createElement("td");
     const bCell = document.createElement("td");
     aCell.className = "num";
@@ -600,7 +657,7 @@ function renderSbc() {
     }
     const sum = document.createElement("td");
     sum.className = "num line-sum";
-    sum.textContent = money.format(item.current);
+    sum.textContent = item.blocked ? "не входит" : money.format(item.current);
     const action = document.createElement("td");
     const remove = document.createElement("button");
     remove.type = "button";
@@ -613,7 +670,8 @@ function renderSbc() {
       paint();
     });
     action.append(remove);
-    tr.append(choice, xCell, aCell, bCell, sum, action);
+    if (kind === "site") tr.append(choice, xCell, factorCell, aCell, bCell, sum, action);
+    else tr.append(choice, xCell, aCell, bCell, sum, action);
     body.append(tr);
   });
   must<HTMLElement>("#sbc-empty").hidden = sbcLines.length > 0;
@@ -621,17 +679,23 @@ function renderSbc() {
 }
 
 function renderSbcTotals() {
+  text("#sbc-index-readout", indexText());
+  if (kind === "site") writeLede(siteLede());
   const sheet = quoteSbc(readSbcSheet());
-  text("#sbc-base", sbcLines.length ? sbcNum.format(sheet.base) : "—");
-  text("#sbc-factored", sbcLines.length ? sbcNum.format(sheet.factored) : "—");
-  text("#sbc-now", sbcLines.length ? money.format(sheet.now) : "—");
+  const priced = sheet.lines.some((line) => !line.blocked);
+  text("#sbc-base", sbcLines.length && priced ? sbcNum.format(sheet.base) : "—");
+  text("#sbc-factored", sbcLines.length && priced ? sbcNum.format(sheet.factored) : "—");
+  text("#sbc-now", sbcLines.length && priced ? money.format(sheet.now) : "—");
+  const note = must<HTMLElement>("#sbc-note");
+  note.hidden = sheet.notes.length === 0;
+  note.textContent = sheet.notes.join(" ");
   const warn = must<HTMLElement>("#sbc-warn");
   warn.hidden = sheet.warnings.length === 0;
   warn.textContent = sheet.warnings.join(" ");
   document.querySelectorAll("#sbc-table tbody tr").forEach((tr, index) => {
     const cell = tr.querySelector(".line-sum");
     const line = sheet.lines[index];
-    if (cell && line) cell.textContent = money.format(line.current);
+    if (cell && line) cell.textContent = line.blocked ? "не входит" : money.format(line.current);
   });
 }
 
@@ -649,31 +713,46 @@ function persistBook() {
   localStorage.setItem(BOOK_KEY, JSON.stringify(catalog));
 }
 
-function loadSbc(): SbcLineInput[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(SBC_KEY) || "null");
-    if (isStoredSbc(parsed)) return parsed.lines;
-  } catch {
-    /* пустой лист */
+function loadStore() {
+  buckets = { linear: emptyBucket(), site: emptyBucket() };
+  kind = null;
+  const saved = readJson(SBC_KEY);
+  if (isV2(saved)) {
+    buckets.linear = sanitizeBucket(saved.linear);
+    buckets.site = sanitizeBucket(saved.site);
+    if (saved.objectKind === "linear" || saved.objectKind === "site") kind = saved.objectKind;
+    if (typeof saved.stage === "string") applyStage(saved.stage);
+    if (isIndex(saved.index)) sbcIndex = saved.index;
+  } else {
+    const legacy = readJson(SBC_KEY_V1);
+    if (isLegacy(legacy)) {
+      kind = "linear";
+      buckets.linear = sanitizeBucket({ k: legacy.k, lines: legacy.lines });
+      if (typeof legacy.stage === "string") applyStage(legacy.stage);
+    }
   }
-  return [];
+  sbcLines = kind ? buckets[kind].lines : [];
+  must<HTMLInputElement>("[name=sbc-index]").value = String(sbcIndex);
+  if (kind) {
+    must<HTMLInputElement>("[name=sbc-k]").value = String(buckets[kind].k);
+    const radio = document.querySelector<HTMLInputElement>(`input[name="object-kind"][value="${kind}"]`);
+    if (radio) radio.checked = true;
+  }
 }
 
 function persistSbc() {
-  const sheet = readSbcSheet();
-  localStorage.setItem(SBC_KEY, JSON.stringify({ stage: sheet.stage, k: String(sheet.k), lines: sbcLines }));
-}
-
-function restoreSbcFactors() {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(SBC_KEY) || "null");
-    if (!parsed || typeof parsed !== "object") return;
-    const saved = parsed as { stage?: unknown; k?: unknown };
-    if (typeof saved.stage === "string") applyStage(saved.stage);
-    if (saved.k !== undefined) must<HTMLInputElement>("[name=sbc-k]").value = String(saved.k);
-  } catch {
-    /* остаются значения формы */
+  sbcIndex = readIndex();
+  if (kind) {
+    buckets[kind].k = readK();
+    buckets[kind].lines = sbcLines;
   }
+  localStorage.setItem(SBC_KEY, JSON.stringify({
+    objectKind: kind,
+    stage: field("stage") || "pr",
+    index: sbcIndex,
+    linear: buckets.linear,
+    site: buckets.site,
+  }));
 }
 
 function isPosition(value: unknown): value is Position {
@@ -682,8 +761,14 @@ function isPosition(value: unknown): value is Position {
   return typeof item.id === "string" && typeof item.name === "string" && typeof item.unit === "string" && Array.isArray(item.variants);
 }
 
-function isStoredSbc(value: unknown): value is { lines: SbcLineInput[] } {
+function isLegacy(value: unknown): value is { lines: unknown; k?: unknown; stage?: unknown } {
   return !!value && typeof value === "object" && Array.isArray((value as { lines?: unknown }).lines);
+}
+
+function isV2(value: unknown): value is { objectKind?: unknown; stage?: unknown; index?: unknown; linear?: unknown; site?: unknown } {
+  if (!value || typeof value !== "object") return false;
+  const item = value as { linear?: unknown; site?: unknown };
+  return !!item.linear && !!item.site;
 }
 
 function field(name: string): string {
@@ -751,6 +836,164 @@ function download(filename: string, data: unknown) {
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function applyKind(next: ObjectKind) {
+  if (kind) {
+    buckets[kind].k = readK();
+    buckets[kind].lines = sbcLines;
+  }
+  kind = next;
+  sbcLines = buckets[next].lines;
+  must<HTMLInputElement>("[name=sbc-k]").value = String(buckets[next].k);
+  syncKindChrome();
+  renderSbc();
+  persistSbc();
+}
+
+function syncKindChrome() {
+  const tab = must<HTMLButtonElement>("#tab-sbc");
+  tab.disabled = kind === null;
+  tab.title = kind === null ? "Сначала выберите тип объекта" : "";
+  const copy = stageCopy(kind);
+  text("#card-stage-label", copy.label);
+  text("#sbc-stage-label", copy.label);
+  for (const key of ["p", "r", "pr"] as const) {
+    text(`#card-stage-${key}`, copy[key]);
+    text(`#sbc-stage-${key}`, copy[key]);
+  }
+  must<HTMLElement>("#k-sbc1").hidden = kind === "site";
+  must<HTMLElement>("#k-sbc2").hidden = kind !== "site";
+  must<HTMLElement>("#k-site-note").hidden = kind !== "site";
+  must<HTMLInputElement>("[name=sbc-k]").setAttribute("aria-describedby", kind === "site" ? "k-caption-site" : "k-caption");
+  writeLede(kind === "site" ? siteLede() : LINEAR_LEDE);
+  text("#sbc-empty", kind === "site" ? SITE_EMPTY : LINEAR_EMPTY);
+  text("#tip-sbc-row", kind === "site" ? SITE_ROW_TIP : LINEAR_ROW_TIP);
+  text("#tip-sbc-x", kind === "site" ? SITE_X_TIP : LINEAR_X_TIP);
+  text("#kind-hint", kindHint(kind));
+  must<HTMLElement>("#sbc-factor-head").hidden = kind !== "site";
+}
+
+function stageCopy(value: ObjectKind | null) {
+  if (value === "site") return { label: "Стадия по пунктам 2.3.4 и 2.4.11", p: "П, 50%", r: "Р, 50%", pr: "П+Р, 100%" };
+  if (value === "linear") return { label: "Стадия по пункту 1.7", p: "П, 60%", r: "Р, 40%", pr: "П+Р, 100%" };
+  return { label: "Стадия", p: "П", r: "Р", pr: "П+Р" };
+}
+
+function kindHint(value: ObjectKind | null) {
+  if (value === "linear") return "Справочник СБЦП 81-2001-17. Стадия 60% и 40%. Показатель сетей — расход и километры.";
+  if (value === "site") return "Справочник СБЦП 81-2001-07, таблицы 4–7. Стадия 50% и 50%. Показатель сетей — диаметр и метры.";
+  return "Выберите тип, и откроется вкладка «Стоимость в СБЦ».";
+}
+
+function activeRows(): SbcSourceRow[] {
+  return kind === "site" ? SBC2_ROWS : SBC_ROWS;
+}
+
+function factorBox(line: SbcLineInput, source: SbcSourceRow, custom: boolean) {
+  if (custom || source.factors.length === 0) return document.createTextNode("—");
+  const box = document.createElement("div");
+  box.className = "line-factors";
+  source.factors.forEach((key) => {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(line.factors?.[key]);
+    input.addEventListener("change", () => {
+      line.factors = { ...line.factors, [key]: input.checked };
+      persistSbc();
+      paint();
+      renderSbcTotals();
+    });
+    const caption = document.createElement("span");
+    caption.textContent = FACTOR_LABEL[key];
+    label.append(input, caption);
+    box.append(label);
+  });
+  return box;
+}
+
+function emptyBucket(): Bucket {
+  return { k: 1, lines: [] };
+}
+
+function readK() {
+  const raw = Number(must<HTMLInputElement>("[name=sbc-k]").value);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 1;
+}
+
+function readIndex() {
+  const raw = Number(must<HTMLInputElement>("[name=sbc-index]").value);
+  return isIndex(raw) ? raw : SBC_INDEX;
+}
+
+function isIndex(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function indexText() {
+  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 4 }).format(readIndex());
+}
+
+function siteLede() {
+  return `${SITE_TITLE}\nИндекс IV квартала 2026 к этой базе — ${indexText()}.`;
+}
+
+function writeLede(value: string) {
+  const el = must("#sbc-lede");
+  const lines = value.split("\n");
+  el.replaceChildren();
+  lines.forEach((line, index) => {
+    if (index > 0) {
+      el.append(" ");
+      el.append(document.createElement("br"));
+    }
+    el.append(line);
+  });
+}
+
+function readJson(key: string): unknown {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeBucket(value: unknown): Bucket {
+  if (!value || typeof value !== "object") return emptyBucket();
+  const item = value as { k?: unknown; lines?: unknown };
+  const lines = Array.isArray(item.lines) ? item.lines.flatMap((line) => {
+    const clean = sanitizeLine(line);
+    return clean ? [clean] : [];
+  }) : [];
+  const k = Number(item.k);
+  return { k: Number.isFinite(k) && k >= 0 ? k : 1, lines };
+}
+
+function sanitizeLine(value: unknown): SbcLineInput | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as SbcLineInput;
+  if (typeof item.id !== "string" || typeof item.rowId !== "string") return null;
+  return {
+    id: item.id,
+    rowId: item.rowId,
+    x: Number(item.x) || 0,
+    a: item.a === null || item.a === undefined ? null : Number(item.a) || 0,
+    b: item.b === null || item.b === undefined ? null : Number(item.b),
+    customName: typeof item.customName === "string" ? item.customName : "",
+    factors: sanitizeFactors(item.factors),
+  };
+}
+
+function sanitizeFactors(value: unknown): Partial<Record<SbcFactor, boolean>> {
+  if (!value || typeof value !== "object") return {};
+  const source = value as Partial<Record<SbcFactor, unknown>>;
+  const factors: Partial<Record<SbcFactor, boolean>> = {};
+  (Object.keys(FACTOR_LABEL) as SbcFactor[]).forEach((key) => {
+    if (source[key]) factors[key] = true;
+  });
+  return factors;
 }
 
 function applyStage(stage: string) {
